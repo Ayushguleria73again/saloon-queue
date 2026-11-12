@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Core Surfaces */
+  --sf-bg-canvas: #faf9f6;
+  --sf-bg-dashboard: #f8fafc;
+  --sf-bg-surface: #ffffff;
+  --sf-bg-muted: #f1f5f9;
+
+  /* Typography & Borders */
+  --sf-text-primary: #0f172a;
+  --sf-text-secondary: #475569;
+  --sf-border-default: #e2e8f0;
+
+  /* Brand & Accents */
+  --sf-brand-primary: #18181b;
+  --sf-brand-foreground: #ffffff;
+  --sf-brand-accent: #d97706;
+
+  /* Token Status Semantic Palette */
+  --sf-status-waiting-bg: #fef3c7;
+  --sf-status-waiting-fg: #92400e;
+  --sf-status-called-bg: #dbeafe;
+  --sf-status-called-fg: #1e40af;
+  --sf-status-inservice-bg: #ede9fe;
+  --sf-status-inservice-fg: #5b21b6;
+  --sf-status-completed-bg: #d1fae5;
+  --sf-status-completed-fg: #065f46;
+  --sf-status-skipped-bg: #f1f5f9;
+  --sf-status-skipped-fg: #334155;
+  --sf-status-cancelled-bg: #fee2e2;
+  --sf-status-cancelled-fg: #991b1b;
+  --sf-status-noshow-bg: #ffe4e6;
+  --sf-status-noshow-fg: #9f1239;
+
+  /* Radii */
+  --sf-radius-card: 1rem;
+  --sf-radius-control: 0.75rem;
+}
+
+html,
+body {
+  background-color: var(--sf-bg-canvas);
+  color: var(--sf-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background-color: #ffffff;
+  }
+}
