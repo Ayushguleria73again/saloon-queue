@@ -19,6 +19,6 @@ export function extractClientIp(headers: Pick<Headers, "get">): string {
 }
 
 export function hashIpAddress(ipAddress: string, salt?: string): string {
-  const resolvedSalt = salt ?? getEnv().IP_HASH_SALT;
+  const resolvedSalt = salt ?? process.env.IP_HASH_SALT ?? getEnv().IP_HASH_SALT;
   return crypto.createHmac("sha256", resolvedSalt).update(ipAddress.trim()).digest("hex");
 }

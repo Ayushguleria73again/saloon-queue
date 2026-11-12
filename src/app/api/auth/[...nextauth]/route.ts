@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RateLimitError } from "@/lib/errors";
-import { createRequestId, jsonErrorResponse } from "@/lib/http";
+import { RateLimitError, mapErrorToEnvelope } from "@/lib/errors";
+import { createRequestId } from "@/lib/http";
 import { handlers } from "@/server/auth/auth";
 import { extractClientIp, hashIpAddress } from "@/server/security/ip";
 import {
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     if (!decision.allowed) {
       const requestId = createRequestId();
-      const errorResponse = jsonErrorResponse(
+      const mapped = mapErrorToEnvelope(
         new RateLimitError(
           decision.retryAfterSeconds,
           "Too many sign-in attempts. Please wait a few minutes and try again.",
@@ -29,11 +29,25 @@ export async function POST(request: NextRequest) {
         requestId,
       );
 
-      for (const [header, value] of Object.entries(buildRateLimitHeaders(decision))) {
-        errorResponse.headers.set(header, value);
-      }
+      const rateLimitHeaders = buildRateLimitHeaders(decision);
+      const isNextAuthClient = request.headers.get("x-auth-return-redirect") === "1";
 
-      return errorResponse;
+      const payload = isNextAuthClient
+        ? {
+            url: new URL("/login?error=RateLimited", request.nextUrl.origin).toString(),
+            ...mapped.body,
+          }
+        : mapped.body;
+
+      return NextResponse.json(payload, {
+        status: mapped.statusCode,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Request-Id": requestId,
+          ...mapped.headers,
+          ...rateLimitHeaders,
+        },
+      });
     }
   }
 

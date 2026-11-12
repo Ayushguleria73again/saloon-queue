@@ -2,17 +2,8 @@ import { z } from "zod";
 
 export const inviteStaffSchema = z
   .object({
-    name: z
-      .string()
-      .trim()
-      .min(2, "Staff name must be at least 2 characters.")
-      .max(100),
-    email: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .email("Enter a valid email address.")
-      .max(160),
+    name: z.string().trim().min(2, "Staff name must be at least 2 characters.").max(100),
+    email: z.string().trim().toLowerCase().email("Enter a valid email address.").max(160),
     roleId: z.string().uuid("Select a valid staff role."),
     allBranches: z.boolean().default(false),
     branchIds: z.array(z.string().uuid()).max(50).default([]),

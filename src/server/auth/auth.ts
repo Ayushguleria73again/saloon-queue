@@ -1,9 +1,13 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { loginSchema } from "@/features/auth/schemas";
+import { parseCredentialsInput } from "@/features/auth/schemas";
 import { extractClientIp, hashIpAddress } from "@/server/security/ip";
 import { authConfig } from "./auth.config";
 import { authenticateWithCredentials } from "./login-service";
+
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email_not_verified";
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -16,8 +20,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(rawCredentials, request) {
-        const parsed = loginSchema.safeParse(rawCredentials);
-        if (!parsed.success) {
+        const credentials = parseCredentialsInput(rawCredentials);
+        if (!credentials) {
           return null;
         }
 
@@ -28,13 +32,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const userAgent = request?.headers.get("user-agent") ?? undefined;
 
         const result = await authenticateWithCredentials({
-          email: parsed.data.email,
-          password: parsed.data.password,
+          email: credentials.email,
+          password: credentials.password,
           ipAddressHash,
           userAgent,
         });
 
         if (!result.ok) {
+          if (result.reason === "EMAIL_NOT_VERIFIED") {
+            throw new EmailNotVerifiedError();
+          }
           return null;
         }
 

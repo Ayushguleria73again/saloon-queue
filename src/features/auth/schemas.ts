@@ -12,6 +12,21 @@ export const loginSchema = z
 
 export type LoginInput = z.infer<typeof loginSchema>;
 
+export function parseCredentialsInput(
+  rawCredentials: Partial<Record<string, unknown>> | undefined,
+): LoginInput | null {
+  if (!rawCredentials) {
+    return null;
+  }
+
+  const parsed = loginSchema.safeParse({
+    email: rawCredentials.email,
+    password: rawCredentials.password,
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "./button";
@@ -30,10 +30,13 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (!open) return;
+
+    cancelButtonRef.current?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !loading) {
@@ -92,7 +95,12 @@ export function ConfirmModal({
             </p>
 
             <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
-              <Button variant="secondary" disabled={loading} onClick={onCancel}>
+              <Button
+                ref={cancelButtonRef}
+                variant="secondary"
+                disabled={loading}
+                onClick={onCancel}
+              >
                 {cancelLabel}
               </Button>
               <Button

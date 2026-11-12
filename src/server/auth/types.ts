@@ -35,6 +35,7 @@ export interface AuthorizedTenantContext {
   name: string;
   isPlatformAdmin: boolean;
   organizationId: string;
+  organizationName: string;
   memberId: string;
   roleSlug: string;
   allBranches: boolean;

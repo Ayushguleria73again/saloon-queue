@@ -69,7 +69,7 @@
 - **Expected Deliverables**: Registration flow, Branch Studio, Staff & RBAC management UI/APIs.
 - **Acceptance Criteria**: Newly registered salon receives default roles and Main Branch immediately; staff revocation invalidates session immediately.
 - **Testing Requirements**: `IT-ONB-01`, staff revocation & branch assignment tests.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `onboarding-service.ts`, `branch-service.ts`, `staff-service.ts`, `settings-service.ts`, `/register`, `/invite/[token]`, `/owner/dashboard`, `/owner/branches`, `/owner/staff`, `tests/unit` + `tests/integration` green, `tsc`, `eslint`, `prettier`, `next build`)
 
 ---
 
@@ -83,7 +83,7 @@
 - **Expected Deliverables**: Services CRUD + per-branch availability/override matrix.
 - **Acceptance Criteria**: Deactivating or repricing a service updates public branch intake immediately without changing historical `TokenService` rows.
 - **Testing Requirements**: `IT-BRN-02` (branch price isolation + snapshot integrity).
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `catalog-service.ts`, `branch-catalog-cache.ts`, `/api/owner/services/*`, `/api/owner/branches/[branchId]/services/[serviceId]`, `/owner/services`, `IT-BRN-02` + unit/integration suites green, `tsc`, `eslint`, `prettier`, `next build`)
 
 ---
 
@@ -96,7 +96,7 @@
 - **Expected Deliverables**: Public branch intake page & API endpoint.
 - **Acceptance Criteria**: Suspended tenants/inactive branches show unavailable message; closed hours display branch schedule; invalid Indian phone rejected inline.
 - **Testing Requirements**: Unit tests (`UT-PHN-01..04`, `UT-DAT-01..03`), `TI-04` (cross-branch service injection blocked).
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `BranchPublicService`, `GET /api/public/salons/[salonSlug]/[branchSlug]`, `/salon/[salonSlug]/[branchSlug]`, `CustomerIntakeForm`, `phone.ts`, `date.ts`, `wait-time.ts`, unit + `TI-04` integration tests, `tsc`, `eslint`, `prettier`, `next build`)
 
 ---
 
@@ -110,7 +110,7 @@
 - **Expected Deliverables**: `TokenService`, `WaitTimeService`, public token creation API.
 - **Acceptance Criteria**: Parallel submissions across branches yield strictly unique sequential tokens (`A001`..`A025` independently per branch); duplicate active phone rejected without PII leak.
 - **Testing Requirements**: `UT-WT-01..04`, `IT-BRN-01`, `IT-PUB-01..02`, `CT-01..04`.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `WaitTimeService`, `TokenService`, `POST /api/public/salons/[salonSlug]/[branchSlug]/tokens`, unit tests, `IT-PUB-01..02`, `IT-BRN-01`, `CT-01..04`, `tsc`, `eslint`, `prettier`, `next build`)
 
 ---
 

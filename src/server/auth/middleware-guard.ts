@@ -83,6 +83,9 @@ export function evaluateMiddlewareGuard(
       loginUrl.searchParams.set("callbackUrl", safeTarget);
       return NextResponse.redirect(loginUrl);
     }
+    if (user?.isPlatformAdmin && !user.activeOrganizationId) {
+      return NextResponse.redirect(new URL("/admin", origin));
+    }
     return null;
   }
 

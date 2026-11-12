@@ -34,6 +34,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       <div
         className={cn(
           "flex min-h-12 items-center overflow-hidden rounded-control border bg-surface transition focus-within:ring-2",
+          rest.disabled && "bg-muted/60 opacity-75",
           error
             ? "border-status-cancelled-fg focus-within:ring-status-cancelled-fg/20"
             : "border-subtle focus-within:border-brand-primary focus-within:ring-brand-primary/20",

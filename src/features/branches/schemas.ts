@@ -41,11 +41,7 @@ export type BranchSettingsUpdateInput = z.infer<typeof branchSettingsUpdateSchem
 
 export const createBranchSchema = z
   .object({
-    name: z
-      .string()
-      .trim()
-      .min(2, "Branch name must be at least 2 characters.")
-      .max(120),
+    name: z.string().trim().min(2, "Branch name must be at least 2 characters.").max(120),
     slug: slugSchema,
     phone: z
       .string()

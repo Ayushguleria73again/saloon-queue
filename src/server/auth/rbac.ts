@@ -91,7 +91,7 @@ export async function authorizeTenantAction(
 
     const organization = await tx.organization.findUnique({
       where: { id: organizationId },
-      select: { id: true, status: true },
+      select: { id: true, name: true, status: true },
     });
 
     if (!organization) {
@@ -105,7 +105,7 @@ export async function authorizeTenantAction(
       );
     }
 
-    return user;
+    return { user, organizationName: organization.name };
   }, options.client);
 
   // 2. Load member RBAC permissions & branch access strictly inside tenant RLS scope
@@ -116,7 +116,7 @@ export async function authorizeTenantAction(
         where: {
           organizationId_userId: {
             organizationId,
-            userId: membershipCheck.id,
+            userId: membershipCheck.user.id,
           },
         },
         select: {
@@ -182,11 +182,12 @@ export async function authorizeTenantAction(
       }
 
       return {
-        userId: membershipCheck.id,
-        email: membershipCheck.email,
-        name: membershipCheck.name,
-        isPlatformAdmin: membershipCheck.isPlatformAdmin,
+        userId: membershipCheck.user.id,
+        email: membershipCheck.user.email,
+        name: membershipCheck.user.name,
+        isPlatformAdmin: membershipCheck.user.isPlatformAdmin,
         organizationId,
+        organizationName: membershipCheck.organizationName,
         memberId: member.id,
         roleSlug: member.staffRole.slug,
         allBranches: member.allBranches,

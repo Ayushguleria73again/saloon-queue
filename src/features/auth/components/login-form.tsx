@@ -2,9 +2,17 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { loginSchema, sanitizeCallbackUrl } from "@/features/auth/schemas";
+
+function resolveInitialAuthError(errorCode: string | null): string | null {
+  if (!errorCode) return null;
+  if (errorCode === "RateLimited") {
+    return "Too many sign-in attempts. Please wait a few minutes and try again.";
+  }
+  return "Your session expired. Please sign in again.";
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -14,15 +22,21 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(() => {
-    return searchParams.get("error")
-      ? "Your session expired. Please sign in again."
-      : null;
-  });
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [devVerifyPath, setDevVerifyPath] = useState<string | null>(null);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const verifiedNotice = searchParams.get("verified") === "1";
+  const [errorMessage, setErrorMessage] = useState<string | null>(() =>
+    resolveInitialAuthError(searchParams.get("error")),
+  );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage(null);
+    setNeedsVerification(false);
+    setResendNotice(null);
+    setDevVerifyPath(null);
 
     const parsed = loginSchema.safeParse({ email, password });
     if (!parsed.success) {
@@ -44,20 +58,32 @@ export function LoginForm() {
       });
 
       if (!result || result.error) {
-        if (result?.status === 429) {
+        if (result?.status === 429 || result?.error === "RateLimited") {
           setErrorMessage(
             "Too many sign-in attempts. Please wait a few minutes and try again.",
           );
+        } else if (result?.code === "email_not_verified") {
+          setNeedsVerification(true);
+          setErrorMessage("Please verify your email address before signing in.");
         } else {
           setErrorMessage("Invalid email or password.");
         }
         return;
       }
 
-      const target = sanitizeCallbackUrl(
-        searchParams.get("callbackUrl"),
-        "/owner/dashboard",
-      );
+      const requestedCallback = searchParams.get("callbackUrl");
+      let target: string;
+
+      if (requestedCallback) {
+        target = sanitizeCallbackUrl(requestedCallback, "/owner/dashboard");
+      } else {
+        const session = await getSession();
+        target =
+          session?.user?.isPlatformAdmin && !session.user.activeOrganizationId
+            ? "/admin"
+            : "/owner/dashboard";
+      }
+
       router.push(target);
       router.refresh();
     } catch {
@@ -67,14 +93,84 @@ export function LoginForm() {
     }
   }
 
+  async function handleResendVerification() {
+    if (!email.trim()) return;
+    setResending(true);
+    setResendNotice(null);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const json = (await res.json()) as {
+        sent?: boolean;
+        devVerificationPath?: string;
+        error?: { message?: string };
+      };
+      if (!res.ok) {
+        setResendNotice(
+          json.error?.message ?? "Unable to resend verification right now.",
+        );
+        return;
+      }
+      if (json.devVerificationPath) {
+        setDevVerifyPath(json.devVerificationPath);
+      }
+      setResendNotice("A fresh verification link has been issued for your email.");
+    } catch {
+      setResendNotice("Unable to resend verification right now.");
+    } finally {
+      setResending(false);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      {verifiedNotice && !errorMessage ? (
+        <div
+          role="status"
+          className="rounded-control bg-status-completed-bg px-4 py-3 text-sm font-medium text-status-completed-fg"
+        >
+          Your account is verified. Please sign in to continue.
+        </div>
+      ) : null}
+
       {errorMessage ? (
         <div
           role="alert"
-          className="rounded-control bg-status-cancelled-bg px-4 py-3 text-sm font-medium text-status-cancelled-fg"
+          className="space-y-2 rounded-control bg-status-cancelled-bg px-4 py-3 text-sm font-medium text-status-cancelled-fg"
         >
-          {errorMessage}
+          <p>{errorMessage}</p>
+          {needsVerification ? (
+            <div className="pt-1">
+              <button
+                type="button"
+                disabled={resending}
+                onClick={handleResendVerification}
+                className="inline-flex min-h-10 items-center rounded-control border border-status-cancelled-fg/30 bg-surface px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-muted disabled:opacity-50"
+              >
+                {resending ? "Sending…" : "Resend Verification Link"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {resendNotice ? (
+        <div
+          role="status"
+          className="space-y-2 rounded-control border border-subtle bg-muted px-4 py-3 text-xs text-ink"
+        >
+          <p className="font-medium">{resendNotice}</p>
+          {devVerifyPath ? (
+            <a
+              href={devVerifyPath}
+              className="inline-flex min-h-10 items-center justify-center rounded-control bg-brand-primary px-4 py-2 text-xs font-semibold text-brand-foreground"
+            >
+              Verify Email Now
+            </a>
+          ) : null}
         </div>
       ) : null}
 

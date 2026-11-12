@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -11,11 +11,13 @@ import {
   LayoutDashboard,
   ListOrdered,
   LogOut,
+  Menu,
   QrCode,
   Scissors,
   Settings,
   Sparkles,
   Users,
+  X,
 } from "lucide-react";
 import { BranchSwitcher, type BranchOption } from "@/components/ui/branch-switcher";
 import { cn } from "@/lib/formatters";
@@ -132,6 +134,7 @@ export function DashboardShell({
   permissionKeys,
 }: DashboardShellProps) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const permissionSet = permissionKeys ? new Set(permissionKeys) : undefined;
   const visibleItems = filterDashboardNavItems(permissionSet);
   const mobileBottomItems = visibleItems.filter((item) => item.primaryMobile).slice(0, 5);
@@ -198,24 +201,85 @@ export function DashboardShell({
 
       {/* Mobile Top Bar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-subtle bg-surface px-4 py-3 pt-safe md:hidden">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand-primary text-brand-foreground">
-              <Scissors className="h-4 w-4" aria-hidden="true" />
+        <header className="no-print sticky top-0 z-30 border-b border-subtle bg-surface pt-safe md:hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand-primary text-brand-foreground">
+                <Scissors className="h-4 w-4" aria-hidden="true" />
+              </div>
+              <span className="truncate text-sm font-bold text-ink">
+                {organizationName}
+              </span>
             </div>
-            <span className="truncate text-sm font-bold text-ink">
-              {organizationName}
-            </span>
+
+            <div className="flex items-center gap-2">
+              {branches.length > 0 && onBranchChange ? (
+                <div className="max-w-[160px] shrink-0">
+                  <BranchSwitcher
+                    branches={branches}
+                    selectedBranchId={selectedBranchId}
+                    onChange={onBranchChange}
+                  />
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                aria-label={
+                  mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
+                }
+                aria-expanded={mobileMenuOpen}
+                aria-controls="owner-mobile-drawer"
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-subtle bg-surface text-ink transition hover:bg-muted"
+              >
+                {mobileMenuOpen ? (
+                  <X className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <Menu className="h-5 w-5" aria-hidden="true" />
+                )}
+              </button>
+            </div>
           </div>
 
-          {branches.length > 0 && onBranchChange ? (
-            <div className="max-w-[180px] shrink-0">
-              <BranchSwitcher
-                branches={branches}
-                selectedBranchId={selectedBranchId}
-                onChange={onBranchChange}
-              />
-            </div>
+          {mobileMenuOpen ? (
+            <nav
+              id="owner-mobile-drawer"
+              aria-label="Mobile menu navigation"
+              className="border-t border-subtle bg-surface px-4 py-3"
+            >
+              <div className="space-y-1">
+                {visibleItems.map((item) => {
+                  const active =
+                    pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const Icon = item.Icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex min-h-12 items-center gap-3 rounded-control px-3 py-2 text-sm font-medium transition",
+                        active
+                          ? "bg-brand-primary text-brand-foreground"
+                          : "text-ink-secondary hover:bg-muted hover:text-ink",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden={true} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-control px-3 py-2 text-sm font-medium text-ink-secondary transition hover:bg-muted hover:text-ink"
+                >
+                  <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </nav>
           ) : null}
         </header>
 

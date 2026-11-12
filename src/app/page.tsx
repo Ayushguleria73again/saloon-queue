@@ -14,15 +14,21 @@ export default function HomePage() {
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <Link
-          href="/login"
+          href="/register"
           className="inline-flex min-h-12 items-center justify-center rounded-control bg-brand-primary px-6 py-3 text-sm font-semibold text-brand-foreground transition hover:opacity-95"
+        >
+          Register Your Salon
+        </Link>
+        <Link
+          href="/login"
+          className="inline-flex min-h-12 items-center justify-center rounded-control border border-subtle bg-surface px-6 py-3 text-sm font-semibold text-ink transition hover:bg-muted"
         >
           Owner &amp; Staff Sign In
         </Link>
       </div>
       <div className="mt-6 rounded-card border border-subtle bg-surface px-6 py-4 text-sm text-ink-secondary shadow-sm">
-        Phase 2 authentication &amp; multi-tenant RBAC active. Customer &amp; owner
-        portals launch in upcoming phases.
+        Multi-tenant salon onboarding, branch management, and RBAC active. Customer &amp;
+        queue portals launch next.
       </div>
     </main>
   );

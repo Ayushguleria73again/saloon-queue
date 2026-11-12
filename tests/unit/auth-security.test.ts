@@ -2,7 +2,11 @@ import crypto from "node:crypto";
 import type { Session } from "next-auth";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { changePasswordSchema, sanitizeCallbackUrl } from "@/features/auth/schemas";
+import {
+  changePasswordSchema,
+  parseCredentialsInput,
+  sanitizeCallbackUrl,
+} from "@/features/auth/schemas";
 import { ForbiddenError } from "@/lib/errors";
 import { evaluateMiddlewareGuard } from "@/server/auth/middleware-guard";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
@@ -18,7 +22,20 @@ import {
 vi.mock("@/server/auth/auth", () => ({
   handlers: {
     GET: vi.fn(),
-    POST: vi.fn(async () => new Response(JSON.stringify({ url: "http://localhost:3000/" }), { status: 200 })),
+    POST: vi.fn(
+      async () =>
+        new Response(JSON.stringify({ url: "http://localhost:3000/" }), { status: 200 }),
+    ),
+  },
+}));
+
+vi.mock("@/server/auth/auth", () => ({
+  handlers: {
+    GET: vi.fn(),
+    POST: vi.fn(
+      async () =>
+        new Response(JSON.stringify({ url: "http://localhost:3000/" }), { status: 200 }),
+    ),
   },
 }));
 
@@ -125,6 +142,20 @@ describe("Security helpers (IP, RateLimiter, CSRF, Schema strictness)", () => {
     });
 
     expect(parsed.success).toBe(false);
+  });
+
+  it("extracts email and password cleanly when NextAuth attaches csrfToken and callbackUrl", () => {
+    const parsed = parseCredentialsInput({
+      email: "  Owner@Salon.in ",
+      password: "Password!2026",
+      csrfToken: "csrf_123456",
+      callbackUrl: "http://localhost:3000/login",
+    });
+
+    expect(parsed).toEqual({
+      email: "owner@salon.in",
+      password: "Password!2026",
+    });
   });
 });
 

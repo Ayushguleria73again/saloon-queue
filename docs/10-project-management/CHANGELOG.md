@@ -2,6 +2,62 @@
 
 ---
 
+## [0.8.0 — Phase 7: Token Generation Engine & Concurrency] - 2026-11-12
+
+### Added
+- Built `WaitTimeService` (`src/server/services/wait-time-service.ts`) combining earliest-free-station wait simulation with clamped `[0.85, 1.35]` 30-day historical overrun calibration when `>= 20` completed branch tokens exist, and reused it in `BranchPublicService`.
+- Built `TokenService` (`src/server/services/token-service.ts`: `createPublicToken()`, `issueBranchToken()`, `resolvePublicBranchIdentity()`) with `pg_advisory_xact_lock`, idempotency key replay, `409 ACTIVE_TOKEN_EXISTS` zero-PII duplicate active guard, `Customer` upsert, atomic daily `QueueCounter` `ON CONFLICT DO UPDATE`, 128-bit `publicId`, `TokenService` price/duration snapshots, `NEW_TOKEN_OWNER_ALERT` transactional outbox event, `TOKEN_CREATED` audit log, and non-blocking post-commit hook isolation.
+- Added `POST /api/public/salons/[salonSlug]/[branchSlug]/tokens` (`src/app/api/public/salons/[salonSlug]/[branchSlug]/tokens/route.ts`) enforcing honeypot rejection, per-branch IP (`20/10m`) and mobile (`3/15m`) sliding-window rate limits, returning `201 Created` (`200 OK` on idempotent replay) with `{ token, redirectUrl }`.
+- Added unit tests (`tests/unit/token-generation.test.ts`) and live PostgreSQL integration & concurrency suite (`tests/integration/token-generation-concurrency.test.ts`: `IT-PUB-01`, `IT-PUB-02`, `IT-BRN-01`, `CT-01..04`, 30-day overrun calibration).
+
+---
+
+## [0.7.0 — Phase 6: Public QR Customer Interface & Credentials Login Fix] - 2026-11-12
+
+### Added
+- Implemented `BranchPublicService` & `validateBranchServiceSelection()` (`src/server/services/branch-public-service.ts`), `GET /api/public/salons/[salonSlug]/[branchSlug]`, and `/salon/[salonSlug]/[branchSlug]` mobile-first customer intake UI (`CustomerIntakeForm`, sticky bottom bar, honeypot, `localStorage` active-token shortcut, suspended/closed/QR-invalid states).
+- Added pure domain helpers: Indian 10-digit mobile normalization/masking (`src/lib/phone.ts`), timezone + `dayResetTime` + operating-hours evaluation (`src/lib/date.ts`), and `O(N*K)` earliest-free-station wait-time simulator (`src/lib/wait-time.ts`).
+- Added unit tests (`tests/unit/phone-date-waittime.test.ts` covering `UT-PHN-01..04`, `UT-DAT-01..03`, `UT-WT-01..04`) and live PostgreSQL integration tests (`tests/integration/public-intake-snapshot.test.ts` covering branch states and `TI-04`).
+
+### Fixed
+- **Credentials `authorize()` Form Field Rejection**: Added `parseCredentialsInput()` (`src/features/auth/schemas.ts`) used by `src/server/auth/auth.ts` so Auth.js's extra form-body fields (`csrfToken`, `callbackUrl`) no longer trip `loginSchema.strict()` during browser sign-in (`tests/unit/auth-security.test.ts`).
+
+---
+
+## [0.6.0 — Phase 5: Services Management & Verification Login UX Fix] - 2026-11-12
+
+### Added
+- Built organization `Service` catalog and per-branch `BranchService` override service (`src/server/services/catalog-service.ts`), Zod schemas (`src/features/services/schemas.ts`), and RBAC-protected API routes (`/api/owner/services`, `/api/owner/services/[serviceId]`, `/api/owner/branches/[branchId]/services/[serviceId]`).
+- Built bounded LRU short-TTL (`20s`) public catalog cache (`src/server/cache/branch-catalog-cache.ts`) with immediate write-through invalidation from both `CatalogService` and `BranchService`.
+- Built `/owner/services` UI (`src/features/services/components/services-manager.tsx`, `src/app/(owner)/owner/services/page.tsx`) supporting branch price/duration overrides, availability toggles, and `ConfirmModal` soft-deactivation without mutating historical `TokenService` snapshots.
+- Added cache/schema unit tests (`tests/unit/catalog-cache.test.ts`) and live PostgreSQL `IT-BRN-02` integration tests (`tests/integration/services-catalog.test.ts`).
+
+### Fixed
+- **Unverified Signup Sign-In UX**: Added `EmailNotVerifiedError` (`code: "email_not_verified"`) in `src/server/auth/auth.ts` (thrown only after password match), added `POST /api/auth/resend-verification` (`resendVerificationEmail` in `onboarding-service.ts`), surfaced clear `"Please verify your email address before signing in."` + inline `"Resend Verification Link"` CTA in `LoginForm`, and promoted the dev verification link to the primary button on `/register`.
+
+---
+
+## [0.5.0 — Phase 4: Salon Onboarding & Branch Management] - 2026-11-12
+
+### Added
+- Built atomic salon registration & email verification (`src/server/services/onboarding-service.ts`, `src/app/api/auth/register-salon/route.ts`, `verify-email/route.ts`, `/register` UI) with `5 req / 1 hr` per-IP rate limiting, honeypot guard, default `StaffRole`s + permissions, initial `Branch` + 7 `BusinessHours`, `SalonSettings`, and `AuditLog`.
+- Built multi-branch management & org settings (`src/server/services/branch-service.ts`, `settings-service.ts`, `/api/owner/branches/*`, `/api/owner/settings`, `/owner/branches` UI) with active catalog `BranchService` inheritance and 7-day hours/rules editor.
+- Built 48-hour SHA-256 hashed staff invitations, branch-scoped `StaffBranchAccess` management, `/invite/[token]` acceptance flow, and immediate `STAFF_REVOKED` session/push revocation (`src/server/services/staff-service.ts`, `/api/owner/staff/*`, `/api/auth/invites/[token]/accept`, `/owner/staff` UI).
+- Implemented `/owner/dashboard` onboarding checklist + branch summary and wired `(owner)/layout.tsx` to real `authorizeTenantAction()` tenant context (`organizationName` + `permissions`).
+- Added unit (`tests/unit/onboarding-schemas.test.ts`) and live PostgreSQL integration tests (`tests/integration/onboarding-branches-staff.test.ts`: `IT-ONB-01`, branch inheritance/isolation, staff invite/revocation).
+
+---
+
+## [0.4.1 — Surgical Bug Hunt (Phase 2 & Phase 3)] - 2026-11-12
+
+### Fixed
+- **Auth Rate-Limit NextAuth Redirect Compatibility (`src/app/api/auth/[...nextauth]/route.ts`, `src/features/auth/components/login-form.tsx`, `src/server/security/ip.ts`)**: Added `url: "/login?error=RateLimited"` to `429` credentials callback responses when `X-Auth-Return-Redirect: 1` is sent so `next-auth/react` `signIn()` parses the response instead of throwing `Invalid URL`, resolved `hashIpAddress` fallback without requiring unrelated env vars, and handled `?error=RateLimited` in `LoginForm`.
+- **Platform Admin Routing (`src/server/auth/middleware-guard.ts`, `src/features/auth/components/login-form.tsx`)**: Routed pure Platform Admins (`isPlatformAdmin && !activeOrganizationId`) cleanly to `/admin` both on post-login resolution and when visiting `/owner/*`.
+- **Mobile Workspace Access (`src/components/layout/dashboard-shell.tsx`, `admin-shell.tsx`)**: Added an accessible mobile navigation drawer in `DashboardShell` exposing secondary routes (`Branches`, `Staff & Roles`, `History`, `Analytics`) and `Sign Out` at `< 768px`, plus a mobile `Sign Out` button in `AdminShell`.
+- **UI Primitive Polish (`src/components/ui/button.tsx`, `branch-switcher.tsx`, `confirm-modal.tsx`, `input.tsx`)**: Enforced `min-h-12` (`48px`) mobile tap target on `Button` `size="sm"`, added `ChevronDown` and controlled value fallback to `BranchSwitcher`, added initial dialog focus on `ConfirmModal` open, and styled disabled `<Input>` wrappers clearly.
+
+---
+
 ## [0.4.0 — Phase 3: Design System & Application Shell] - 2026-11-12
 
 ### Added

@@ -1,8 +1,8 @@
 # PROJECT_STATUS.md — SalonFlow Implementation Tracker
 
 **Last Updated**: 2026-11-12  
-**Current Stage**: Phase 3 Complete — Ready for Phase 4  
-**Overall Status**: 🟢 Phase 3 Verified & Complete — Ready for Phase 4 (Salon Onboarding & Branch Management)
+**Current Stage**: Phase 7 Complete — Ready for Phase 8  
+**Overall Status**: 🟢 Phase 7 Verified & Complete — Ready for Phase 8 (FIFO Queue Management Engine)
 
 ---
 
@@ -15,10 +15,10 @@
 | **1** | Database and tenant architecture | 🟢 Complete | 20 Prisma models, composite FKs, 18 RLS policies, `withTenantDb()`, idempotent seed, `TI-05` & DB checks green |
 | **2** | Authentication and authorization | 🟢 Complete | Auth.js v5 JWT/Credentials, 5-attempt lockout + `LOGIN_LOCKED` audit, `authorizeTenantAction()`, `requirePlatformAdmin()`, `middleware.ts`, `/login`, `TI-01..03` & `IT-RBAC-01` green |
 | **3** | Design system and application shell | 🟢 Complete | Token-based Tailwind UI (`Button`, `Input`, `Textarea`, `StatusBadge`, `ServiceCard`, `StatCard`, `ConfirmModal`, `BranchSwitcher`, `Toast`), `PublicShell`/`DashboardShell`/`AdminShell`, route layouts, jsdom a11y/render tests green |
-| **4** | Salon onboarding and branch management | ⚪ Not Started | Depends on Phases 1, 2, 3 |
-| **5** | Services management | ⚪ Not Started | Depends on Phases 1, 2, 4 |
-| **6** | Public QR customer interface | ⚪ Not Started | Depends on Phases 3, 4, 5 |
-| **7** | Token generation engine | ⚪ Not Started | Depends on Phases 1, 6 |
+| **4** | Salon onboarding and branch management | 🟢 Complete | Self-serve `/register`, email verification, Branch CRUD + 7-day `BusinessHours` + service inheritance (`/owner/branches`), Staff invites `/invite/[token]` + branch assignment + immediate revocation (`/owner/staff`), `IT-ONB-01` & integration tests green |
+| **5** | Services management | 🟢 Complete | `CatalogService`, `BranchCatalogCache` (20s TTL + write-through invalidation), `/api/owner/services`, `/api/owner/branches/[branchId]/services/[serviceId]`, `/owner/services`, `IT-BRN-02` & unit/integration suites green |
+| **6** | Public QR customer interface | 🟢 Complete | `BranchPublicService`, `GET /api/public/salons/[salonSlug]/[branchSlug]`, `/salon/[salonSlug]/[branchSlug]`, `CustomerIntakeForm`, `phone.ts`, `date.ts`, `wait-time.ts`, `UT-PHN-01..04`, `UT-DAT-01..03`, `UT-WT-01..04`, `TI-04` green |
+| **7** | Token generation engine | 🟢 Complete | `WaitTimeService` (station sim + clamped 30d overrun), `TokenService` (`pg_advisory_xact_lock`, atomic `QueueCounter`, 128-bit `publicId`, `TokenService` snapshots, `NotificationEvent` outbox, `AuditLog`), `POST /api/public/salons/[salonSlug]/[branchSlug]/tokens`, `IT-PUB-01..02`, `IT-BRN-01`, `CT-01..04` green |
 | **8** | FIFO queue management engine | ⚪ Not Started | Depends on Phases 2, 7 |
 | **9** | Customer token tracking | ⚪ Not Started | Depends on Phases 6, 7 |
 | **10** | Owner dashboard | ⚪ Not Started | Depends on Phases 2, 3, 8 |
@@ -83,3 +83,35 @@ Legend: 🟢 Complete | 🔵 In Progress | 🟡 Pending Review | ⚪ Not Started
 - [x] 9 semantic-token UI primitives (`src/components/ui/`: `Button`, `Input`, `Textarea`, `StatusBadge`, `ServiceCard`, `StatCard`, `ConfirmModal`, `BranchSwitcher`, `Toast`) honoring `>=48px` tap height, `>=16px` mobile inputs, and `useReducedMotion()`
 - [x] Isolated adaptive shells (`PublicShell`, `DashboardShell` with desktop 240px sidebar + mobile bottom nav & RBAC filtering, `AdminShell`) and route-group layouts (`(public)`, `(owner)`, `(admin)`)
 - [x] Component render & accessibility tests (`tests/unit/ui-primitives.test.tsx`, `formatters.test.ts`) passing in jsdom + React Testing Library
+
+## Completed Phase 4 Deliverables
+
+- [x] Atomic self-serve onboarding (`src/server/services/onboarding-service.ts`, `POST /api/auth/register-salon` rate-limited + honeypot, `GET|POST /api/auth/verify-email`, `/register`) initializing default `StaffRole`s, `RolePermission`s, `SalonSettings`, `Branch`, 7-day `BusinessHours`, and `AuditLog`
+- [x] Branch management (`src/server/services/branch-service.ts`, `GET|POST /api/owner/branches`, `PATCH /api/owner/branches/[branchId]`, `settings-service.ts`, `/owner/branches`) inheriting active org services onto new branches
+- [x] Staff invitations, branch assignment & immediate revocation (`src/server/services/staff-service.ts`, `/api/owner/staff/*`, `/api/auth/invites/[token]/accept`, `/invite/[token]`, `/owner/staff`) incrementing `sessionVersion` and disabling push subscriptions on revocation
+- [x] Owner workspace dashboard (`/owner/dashboard`) and RBAC-wired `(owner)/layout.tsx`
+- [x] Schema unit tests (`tests/unit/onboarding-schemas.test.ts`) and live PostgreSQL integration tests (`tests/integration/onboarding-branches-staff.test.ts`: `IT-ONB-01`, branch hours/inheritance, staff invite/revocation) passing
+
+## Completed Phase 5 Deliverables
+
+- [x] Bounded short-TTL public branch catalog cache (`src/server/cache/branch-catalog-cache.ts`, 20s TTL + LRU eviction + branch/org write-through invalidation)
+- [x] Organization catalog & per-branch `BranchService` override domain service (`src/server/services/catalog-service.ts`), plus write-through invalidation in `branch-service.ts`
+- [x] RBAC-protected REST endpoints (`GET|POST /api/owner/services`, `PATCH /api/owner/services/[serviceId]`, `PUT /api/owner/branches/[branchId]/services/[serviceId]`)
+- [x] `/owner/services` UI (`src/features/services/components/services-manager.tsx`, `src/app/(owner)/owner/services/page.tsx`) with branch price/duration override controls and `ConfirmModal` soft-deactivation
+- [x] Email verification login UX fix (`EmailNotVerifiedError` code `email_not_verified` in `auth.ts`, inline `"Resend Verification Link"` on `/login`, `POST /api/auth/resend-verification`, and primary verification CTA on `/register`)
+- [x] Cache unit tests (`tests/unit/catalog-cache.test.ts`) and live PostgreSQL `IT-BRN-02` + resend verification integration tests (`tests/integration/services-catalog.test.ts`) passing
+
+## Completed Phase 6 Deliverables
+
+- [x] Indian 10-digit phone normalization/masking (`src/lib/phone.ts`), timezone + `dayResetTime` business date & operating hours evaluator (`src/lib/date.ts`), and earliest-free-station wait simulator (`src/lib/wait-time.ts`)
+- [x] `BranchPublicService` & `validateBranchServiceSelection` (`src/server/services/branch-public-service.ts`) + `GET /api/public/salons/[salonSlug]/[branchSlug]`
+- [x] Mobile-first customer intake UI (`/salon/[salonSlug]/[branchSlug]/page.tsx`, `src/features/public-intake/components/customer-intake-form.tsx`, `schemas.ts`) handling suspended/inactive, strict QR, closed/paused schedule, sticky checkout bar, honeypot, and `localStorage` active-token shortcut
+- [x] Fixed NextAuth `Credentials.authorize()` rejecting `csrfToken`/`callbackUrl` via `.strict()` schema (`parseCredentialsInput` in `src/features/auth/schemas.ts`, wired in `src/server/auth/auth.ts`)
+- [x] Unit (`tests/unit/phone-date-waittime.test.ts`: `UT-PHN-01..04`, `UT-DAT-01..03`, `UT-WT-01..04`) and live PostgreSQL integration (`tests/integration/public-intake-snapshot.test.ts`: branch availability states & `TI-04`) passing
+
+## Completed Phase 7 Deliverables
+
+- [x] `WaitTimeService` (`src/server/services/wait-time-service.ts`) computing live queue wait projections with bounded `[0.85, 1.35]` 30-day historical overrun calibration when `>= 20` completed tokens exist, reused cleanly by `BranchPublicService` and `TokenService`
+- [x] `TokenService` (`src/server/services/token-service.ts`: `createPublicToken()`, `issueBranchToken()`, `resolvePublicBranchIdentity()`) implementing `pg_advisory_xact_lock`, idempotency key replay, `409 ACTIVE_TOKEN_EXISTS` zero-PII duplicate guard, branch `Customer` upsert, atomic `QueueCounter` `ON CONFLICT DO UPDATE`, 128-bit `publicId`, `TokenService` historical snapshots, `NEW_TOKEN_OWNER_ALERT` transactional outbox row, `TOKEN_CREATED` audit log, and non-blocking post-commit hook isolation
+- [x] Rate-limited & honeypot-protected `POST /api/public/salons/[salonSlug]/[branchSlug]/tokens` (`201 Created` / `200 OK` on replay / `429` with rate-limit headers)
+- [x] Unit (`tests/unit/token-generation.test.ts`) and live PostgreSQL concurrency & integration tests (`tests/integration/token-generation-concurrency.test.ts`: `IT-PUB-01`, `IT-PUB-02`, `IT-BRN-01`, `CT-01..04`, overrun blend) passing

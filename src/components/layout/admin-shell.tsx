@@ -72,7 +72,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <ShieldCheck className="h-5 w-5 text-brand-accent" aria-hidden="true" />
             <span className="text-sm font-bold text-ink">Platform Admin</span>
           </div>
-          <nav className="flex items-center gap-2" aria-label="Admin mobile links">
+          <nav className="flex items-center gap-1.5" aria-label="Admin mobile links">
             {ADMIN_NAV_ITEMS.map((item) => {
               const active =
                 item.href === "/admin"
@@ -83,7 +83,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "rounded-control px-2.5 py-1.5 text-xs font-medium",
+                    "inline-flex min-h-11 items-center rounded-control px-2.5 py-1.5 text-xs font-medium",
                     active
                       ? "bg-brand-primary text-brand-foreground"
                       : "text-ink-secondary hover:bg-muted",
@@ -93,6 +93,14 @@ export function AdminShell({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+            <button
+              type="button"
+              aria-label="Sign Out"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-secondary transition hover:bg-muted hover:text-ink"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+            </button>
           </nav>
         </header>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { MapPin } from "lucide-react";
+import { ChevronDown, MapPin } from "lucide-react";
 import { cn } from "@/lib/formatters";
 
 export interface BranchOption {
@@ -53,9 +53,9 @@ export function BranchSwitcher({
       />
       <select
         aria-label={label}
-        value={selectedBranchId}
+        value={currentBranch?.id ?? selectedBranchId}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-12 w-full appearance-none rounded-control border border-subtle bg-surface pl-9 pr-8 text-base font-medium text-ink focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 sm:text-sm"
+        className="min-h-12 w-full appearance-none rounded-control border border-subtle bg-surface pl-9 pr-9 text-base font-medium text-ink focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 sm:text-sm"
       >
         {branches.map((branch) => (
           <option key={branch.id} value={branch.id}>
@@ -64,6 +64,10 @@ export function BranchSwitcher({
           </option>
         ))}
       </select>
+      <ChevronDown
+        className="pointer-events-none absolute right-3 h-4 w-4 text-ink-secondary"
+        aria-hidden="true"
+      />
     </div>
   );
 }
