@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { ActorType, TokenSource, TokenStatus } from "@prisma/client";
+import type { ActorType, Prisma, TokenSource, TokenStatus } from "@prisma/client";
 import {
   getBranchLocalTimeInfo,
   getBusinessDateForTimezone,
@@ -14,6 +14,8 @@ import {
 import { logger } from "@/lib/logger";
 import { maskMobileNumber, normalizeIndianMobile } from "@/lib/phone";
 import { withBranchDb, withSystemDb, type DbClient } from "@/server/db";
+import { nudgeOutboxWorker } from "@/server/jobs/runner";
+import { getRealtimeHub } from "@/server/realtime";
 import { validateBranchServiceSelection } from "./branch-public-service";
 import { computeBranchWaitSnapshot } from "./wait-time-service";
 
@@ -117,6 +119,131 @@ export function buildTokenStatusUrl(
   publicId: string,
 ): string {
   return `/salon/${salonSlug}/${branchSlug}/token/${publicId}`;
+}
+
+export interface EffectiveBranchSettings {
+  tokenPrefix: string;
+  activeStationsCount: number;
+  allowDuplicateActiveTokens: boolean;
+  allowCustomerCancel: boolean;
+  enforceBusinessHours: boolean;
+  isAcceptingTokens: boolean;
+  queuePausedReason: string | null;
+  requireValidQrToken: boolean;
+  dayResetTime: string;
+  estimatedBufferMinutes: number;
+  customerPushThresholds: number[];
+}
+
+/**
+ * Resolves branch-specific `SalonSettings` with fallback to organization defaults.
+ */
+export async function resolveEffectiveBranchSettings(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  branchId: string,
+): Promise<EffectiveBranchSettings> {
+  const settingsRows = await tx.salonSettings.findMany({
+    where: {
+      organizationId,
+      OR: [{ branchId }, { branchId: null }],
+    },
+    select: {
+      branchId: true,
+      tokenPrefix: true,
+      activeStationsCount: true,
+      allowDuplicateActiveTokens: true,
+      allowCustomerCancel: true,
+      enforceBusinessHours: true,
+      isAcceptingTokens: true,
+      queuePausedReason: true,
+      requireValidQrToken: true,
+      dayResetTime: true,
+      estimatedBufferMinutes: true,
+      customerPushThresholds: true,
+    },
+  });
+
+  const resolved = settingsRows.find((s) => s.branchId === branchId) ??
+    settingsRows.find((s) => s.branchId === null) ?? {
+      tokenPrefix: "A",
+      activeStationsCount: 1,
+      allowDuplicateActiveTokens: false,
+      allowCustomerCancel: true,
+      enforceBusinessHours: true,
+      isAcceptingTokens: true,
+      queuePausedReason: null,
+      requireValidQrToken: false,
+      dayResetTime: "00:00",
+      estimatedBufferMinutes: 0,
+      customerPushThresholds: [3, 1],
+    };
+
+  return {
+    tokenPrefix: resolved.tokenPrefix,
+    activeStationsCount: resolved.activeStationsCount,
+    allowDuplicateActiveTokens: resolved.allowDuplicateActiveTokens,
+    allowCustomerCancel: resolved.allowCustomerCancel,
+    enforceBusinessHours: resolved.enforceBusinessHours,
+    isAcceptingTokens: resolved.isAcceptingTokens,
+    queuePausedReason: resolved.queuePausedReason,
+    requireValidQrToken: resolved.requireValidQrToken,
+    dayResetTime: resolved.dayResetTime,
+    estimatedBufferMinutes: resolved.estimatedBufferMinutes,
+    customerPushThresholds: resolved.customerPushThresholds,
+  };
+}
+
+/**
+ * Atomically increments and returns the next daily `(branchId, businessDate, prefix)`
+ * FIFO queue sequence number and formatted token number.
+ */
+export async function allocateNextQueueTokenNumber(
+  tx: Prisma.TransactionClient,
+  params: {
+    organizationId: string;
+    branchId: string;
+    businessDate: Date;
+    tokenPrefix: string;
+  },
+): Promise<{ sequenceNumber: number; tokenNumber: string }> {
+  const prefix = (params.tokenPrefix.trim() || "A").slice(0, 8);
+  const businessDateIso = params.businessDate.toISOString().slice(0, 10);
+  const counterRows = await tx.$queryRaw<Array<{ last_number: number }>>`
+    INSERT INTO "queue_counters" (
+      "id",
+      "organization_id",
+      "branch_id",
+      "business_date",
+      "prefix",
+      "last_number",
+      "updated_at"
+    )
+    VALUES (
+      ${crypto.randomUUID()}::uuid,
+      ${params.organizationId}::uuid,
+      ${params.branchId}::uuid,
+      ${businessDateIso}::date,
+      ${prefix},
+      1,
+      NOW()
+    )
+    ON CONFLICT ("branch_id", "business_date", "prefix")
+    DO UPDATE SET
+      "last_number" = "queue_counters"."last_number" + 1,
+      "updated_at" = NOW()
+    RETURNING "last_number"
+  `;
+
+  const sequenceNumber = Number(counterRows[0]?.last_number ?? 0);
+  if (!Number.isInteger(sequenceNumber) || sequenceNumber < 1) {
+    throw new Error("Failed to allocate atomic queue sequence number.");
+  }
+
+  return {
+    sequenceNumber,
+    tokenNumber: formatTokenNumber(prefix, sequenceNumber),
+  };
 }
 
 /**
@@ -249,37 +376,11 @@ export async function issueBranchToken(
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${advisoryLockKey}::text)::bigint)`;
 
       // 2. Load branch settings (branch override falls back to organization default).
-      const settingsRows = await tx.salonSettings.findMany({
-        where: {
-          organizationId: params.organizationId,
-          OR: [{ branchId: params.branchId }, { branchId: null }],
-        },
-        select: {
-          branchId: true,
-          tokenPrefix: true,
-          activeStationsCount: true,
-          allowDuplicateActiveTokens: true,
-          enforceBusinessHours: true,
-          isAcceptingTokens: true,
-          queuePausedReason: true,
-          requireValidQrToken: true,
-          dayResetTime: true,
-          estimatedBufferMinutes: true,
-        },
-      });
-
-      const settings = settingsRows.find((s) => s.branchId === params.branchId) ??
-        settingsRows.find((s) => s.branchId === null) ?? {
-          tokenPrefix: "A",
-          activeStationsCount: 1,
-          allowDuplicateActiveTokens: false,
-          enforceBusinessHours: true,
-          isAcceptingTokens: true,
-          queuePausedReason: null,
-          requireValidQrToken: false,
-          dayResetTime: "00:00",
-          estimatedBufferMinutes: 0,
-        };
+      const settings = await resolveEffectiveBranchSettings(
+        tx,
+        params.organizationId,
+        params.branchId,
+      );
 
       const businessDate = getBusinessDateForTimezone(
         params.branchTimezone,
@@ -461,40 +562,12 @@ export async function issueBranchToken(
       });
 
       // 8. Atomically allocate next sequence number for (branch, businessDate, prefix).
-      const prefix = (settings.tokenPrefix.trim() || "A").slice(0, 8);
-      const businessDateIso = businessDate.toISOString().slice(0, 10);
-      const counterRows = await tx.$queryRaw<Array<{ last_number: number }>>`
-        INSERT INTO "queue_counters" (
-          "id",
-          "organization_id",
-          "branch_id",
-          "business_date",
-          "prefix",
-          "last_number",
-          "updated_at"
-        )
-        VALUES (
-          ${crypto.randomUUID()}::uuid,
-          ${params.organizationId}::uuid,
-          ${params.branchId}::uuid,
-          ${businessDateIso}::date,
-          ${prefix},
-          1,
-          NOW()
-        )
-        ON CONFLICT ("branch_id", "business_date", "prefix")
-        DO UPDATE SET
-          "last_number" = "queue_counters"."last_number" + 1,
-          "updated_at" = NOW()
-        RETURNING "last_number"
-      `;
-
-      const sequenceNumber = Number(counterRows[0]?.last_number ?? 0);
-      if (!Number.isInteger(sequenceNumber) || sequenceNumber < 1) {
-        throw new Error("Failed to allocate atomic queue sequence number.");
-      }
-
-      const tokenNumber = formatTokenNumber(prefix, sequenceNumber);
+      const { sequenceNumber, tokenNumber } = await allocateNextQueueTokenNumber(tx, {
+        organizationId: params.organizationId,
+        branchId: params.branchId,
+        businessDate,
+        tokenPrefix: settings.tokenPrefix,
+      });
       const publicId = generateOpaqueTokenPublicId();
       const redirectUrl = buildTokenStatusUrl(
         params.organizationSlug,
@@ -625,6 +698,15 @@ export async function issueBranchToken(
 
   // 12. Post-commit non-blocking notification / realtime hooks.
   if (!txOutcome.isIdempotentReplay && txOutcome.notificationEventId) {
+    nudgeOutboxWorker();
+    getRealtimeHub().publishQueueMutation({
+      organizationId: params.organizationId,
+      branchId: params.branchId,
+      tokenId: txOutcome.tokenId,
+      tokenNumber: txOutcome.token.tokenNumber,
+      action: "TOKEN_CREATED",
+      timestamp: new Date().toISOString(),
+    });
     if (params.onTokenCommitted) {
       try {
         await params.onTokenCommitted({

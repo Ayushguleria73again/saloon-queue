@@ -41,3 +41,20 @@ export const publicCreateTokenSchema = z
   .strict();
 
 export type PublicCreateTokenInput = z.infer<typeof publicCreateTokenSchema>;
+
+export const publicTokenIdParamSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9_-]{12,64}$/, "Invalid token identifier.");
+
+export const publicCancelTokenSchema = z
+  .object({
+    reason: z
+      .string()
+      .transform(sanitizePlainText)
+      .pipe(z.string().max(200, "Reason must be at most 200 characters."))
+      .optional(),
+  })
+  .strict();
+
+export type PublicCancelTokenInput = z.infer<typeof publicCancelTokenSchema>;

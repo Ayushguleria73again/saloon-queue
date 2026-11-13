@@ -12,6 +12,7 @@ export type ErrorCode =
   | "SELF_CANCEL_NOT_ALLOWED"
   | "NO_WAITING_CUSTOMERS"
   | "SLUG_TAKEN"
+  | "TOKEN_CLOSED"
   | "SERVICE_UNAVAILABLE"
   | "RATE_LIMITED"
   | "INTERNAL_ERROR";
@@ -88,7 +89,8 @@ export class ConflictError extends AppError {
       | "INVALID_STATE_TRANSITION"
       | "SELF_CANCEL_NOT_ALLOWED"
       | "NO_WAITING_CUSTOMERS"
-      | "SLUG_TAKEN",
+      | "SLUG_TAKEN"
+      | "TOKEN_CLOSED",
     message: string,
   ) {
     super({ code, statusCode: 409, message });

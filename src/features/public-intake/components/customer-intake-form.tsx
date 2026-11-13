@@ -18,6 +18,25 @@ interface CustomerIntakeFormProps {
   services: PublicServiceOption[];
 }
 
+function generateClientUuid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+    bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  const timeHex = Date.now().toString(16).padStart(12, "0").slice(-12);
+  const randHex = Math.floor(Math.random() * 0xffffffff)
+    .toString(16)
+    .padStart(8, "0");
+  return `${randHex}-${timeHex.slice(0, 4)}-4${timeHex.slice(4, 7)}-8${timeHex.slice(7, 10)}-${randHex}${timeHex.slice(0, 4)}`;
+}
+
 export function CustomerIntakeForm({
   salonSlug,
   branchSlug,
@@ -32,11 +51,7 @@ export function CustomerIntakeForm({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [website, setWebsite] = useState("");
-  const [idempotencyKey] = useState(() =>
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : "550e8400-e29b-41d4-a716-446655440000",
-  );
+  const [idempotencyKey] = useState(() => generateClientUuid());
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -133,14 +148,7 @@ export function CustomerIntakeForm({
         },
       );
 
-      if (response.status === 404) {
-        setErrorMessage(
-          "Token submission launches in the next release step (Phase 7). Your form validation succeeded.",
-        );
-        return;
-      }
-
-      const json = (await response.json()) as {
+      const json = (await response.json().catch(() => ({}))) as {
         token?: { publicId: string; tokenNumber: string };
         redirectUrl?: string;
         error?: {

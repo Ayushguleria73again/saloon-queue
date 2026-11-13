@@ -2,6 +2,82 @@
 
 ---
 
+## [0.13.1 — Bug Hunt: Skipped Re-queue Push Migration & Endpoint Deduplication] - 2026-11-13
+
+### Fixed
+- **Skipped Re-queue Push Subscription Migration**: Resolved issue in `QueueService.requeueSkippedToken()` where customers who subscribed to turn alerts on an original token stopped receiving notifications when their skipped token was placed back into the tail of the queue. Active push subscriptions (previously marked `TOKEN_CLOSED` during `SKIP`) are now atomically cloned and reactivated for the new token row within the same ACID transaction, ensuring `TOKEN_REQUEUED`, approaching milestones (`CUSTOMER_APPROACHING_3`, `CUSTOMER_APPROACHING_1`), and `TOKEN_CALLED` seamlessly reach the customer's device, and `pushAlertsEnabled` renders `true` on the new tracking view.
+- **Device Endpoint Deduplication in Outbox Worker**: Fixed `resolveEligibleSubscriptions()` in `src/server/notifications/outbox-worker.ts` to deduplicate resolved subscriptions by physical device `endpoint` using a `Set<string>`, preventing duplicate parallel push dispatches to physical devices when multiple active accounts or scopes share the same browser push subscription.
+- **Regression Verification**: Added `tests/integration/requeue-push-migration.test.ts` (`BUG-01`, `BUG-02`) verifying end-to-end subscription migration, outbox delivery of `TOKEN_REQUEUED` and `TOKEN_CALLED`, and physical device push deduplication under PostgreSQL RLS.
+
+---
+
+## [0.13.0 — Phase 12: Customer Push Notifications] - 2026-11-13
+
+### Added
+- Built browser Web Push client helpers (`src/lib/web-push-client.ts`) and refactored owner and customer push flows to share tested browser permission/registration logic.
+- Implemented `CustomerPushOptInCard` (`src/features/notifications/components/customer-push-opt-in-card.tsx`) on `/salon/[salonSlug]/[branchSlug]/token/[publicId]` with zero auto-prompting, iOS Safari Add-to-Home-Screen hint, graceful permission denial, and instant `Unsubscribe Alerts` toggle.
+- Built customer endpoints: `POST|DELETE /api/public/tokens/[publicId]/push-subscription` (with `10 req/10m` rate limit and `CUSTOMER_OPT_OUT`), and `POST /api/public/push/ack` for Service Worker `DISPLAYED` / `CLICKED` `ACKNOWLEDGED` telemetry.
+- Built milestone notification evaluator in `QueueService` and `branch-service.ts` emitting idempotent `CUSTOMER_APPROACHING_3`, `CUSTOMER_APPROACHING_1`, `TOKEN_CALLED`, and hourly `QUEUE_DELAYED` outbox events with automatic `TOKEN_CLOSED` subscription revocation on completion or cancellation.
+- Added unit/component tests (`tests/unit/token-tracking.test.tsx`: `E2E-03`, `tests/unit/push-validation.test.ts`: `QUEUE_DELAYED`) and live PostgreSQL integration tests (`tests/integration/customer-push-notifications.test.ts`: `NT-03`, `IT-PUB-04`).
+
+---
+
+## [0.12.0 — Phase 11: Web Push Infrastructure & Owner Notifications] - 2026-11-12
+
+### Added
+- Installed `web-push` + `@types/web-push`, configured VAPID keys, and implemented Service Worker (`public/sw.js`) for Web Push notification rendering, click routing, and optional `/api/public/push/ack`.
+- Built isomorphic push endpoint/key SSRF validation, open-redirect URL sanitization, and payload formatters (`src/lib/push-validation.ts`), plus notification Zod schemas and DTOs (`src/features/notifications/schemas.ts`, `src/features/notifications/types.ts`).
+- Built `VapidWebPushTransport` (`src/server/notifications/web-push-adapter.ts`), transactional `NotificationOutboxWorker` (`src/server/notifications/outbox-worker.ts` with `FOR UPDATE SKIP LOCKED`, `[15s, 60s, 300s, 900s]` retries, `DEAD_LETTER` after 5 failures, `404`/`410` device revocation, and active-member/branch scoping), and background runner nudges (`src/server/jobs/runner.ts`) hooked into `token-service.ts` and `queue-service.ts`.
+- Built `owner-notification-service.ts`, owner endpoints (`/api/owner/push-subscriptions`, `/api/owner/push-subscriptions/test`, `/api/owner/notifications`, `/api/owner/notifications/[id]/retry`), `CRON_SECRET` worker trigger (`POST /api/internal/jobs/process`), and `/owner/settings/notifications` UI (`OwnerNotificationsManager`).
+- Added unit tests (`tests/unit/push-validation.test.ts`: `UT-PSH-01..02`) and live PostgreSQL integration tests (`tests/integration/notification-outbox.test.ts`: `NT-01`, `NT-02`, `NT-04`, `NT-05`, `NT-06`).
+
+---
+
+## [0.11.0 — Phase 10: Owner Dashboard, Live Queue Console & QR Studio] - 2026-11-12
+
+### Added
+- Installed `qrcode` and built `QrService` (`src/server/services/qr-service.ts`), `GET /api/owner/branches/[branchId]/qr?format=json|png|svg`, and `POST /api/owner/branches/[branchId]/qr/regenerate` (`BRANCH_QR_ROTATED` audit).
+- Upgraded `/owner/dashboard` (`src/app/(owner)/owner/dashboard/page.tsx`) with live branch KPIs and quick links to Live Queue, QR Studio, and History.
+- Built `/owner/queue` (`src/features/queue/components/live-queue-console.tsx`) with 7 live KPIs, `Call Next`, `+ Add Walk-In` modal, status action controls gated by `RolePermission`, `Re-queue to Tail` on skipped tokens, intake pause/resume toggle, and foreground `ETag` polling.
+- Built `/owner/history` (`src/features/queue/components/branch-history-view.tsx`) with keyset-paginated date/status/search filtering.
+- Built `/owner/qr` (`src/features/qr/components/qr-studio.tsx`) with `@media print`-isolated standee poster, PNG/SVG downloads, copy URL, and `ConfirmModal` QR rotation, plus `/owner/settings` (`src/features/settings/components/owner-settings-view.tsx`).
+- Added unit/component (`tests/unit/phase10-dashboard-qr.test.tsx`) and live PostgreSQL integration tests (`tests/integration/qr-studio.test.ts`).
+
+---
+
+## [0.10.0 — Phase 9: Customer Token Tracking] - 2026-11-12
+
+### Added
+- Built sanitized customer ticket service (`src/server/services/token-tracking-service.ts`: `resolvePublicTokenScope()`, `getPublicTokenTracking()`, `cancelPublicToken()`) with mobile masking (`******3210`), cross-tenant vanity URL protection (`TI-06`), re-queue destination links, and `WAITING`-only audited self-cancellation.
+- Extracted shared `jsonWithEtag()` (`src/lib/http.ts`) and reused it in `GET /api/owner/branches/[branchId]/queue` and `GET /api/public/tokens/[publicId]`.
+- Added rate-limited public ticket endpoints (`GET /api/public/tokens/[publicId]` with `ETag`/`304`, `POST /api/public/tokens/[publicId]/cancel`).
+- Built `/salon/[salonSlug]/[branchSlug]/token/[publicId]` (`TokenTrackerView`) displaying confirmation copy, giant monospace token badge, queue position/wait metrics, masked customer details, re-queue link banner, `ConfirmModal` cancellation, `localStorage` sync, and visibility-aware `ETag` polling.
+- Added unit/jsdom (`tests/unit/token-tracking.test.tsx`) and live PostgreSQL integration tests (`tests/integration/customer-token-tracking.test.ts`: `IT-PUB-03`, `IT-PUB-05`, `TI-06`).
+
+---
+
+## [0.9.0 — Phase 8: FIFO Queue Management Engine] - 2026-11-12
+
+### Added
+- Built pure 7-status FIFO queue transition engine (`src/lib/queue-state-machine.ts`: `validateTokenTransition()`, `buildTransitionTimestamps()`) and transport schemas/types (`src/features/queue/schemas.ts`, `src/features/queue/types.ts`).
+- Built `QueueService` (`src/server/services/queue-service.ts`) implementing atomic `callNextToken()` (`FOR UPDATE SKIP LOCKED`), `transitionBranchToken()` (`FOR UPDATE` row lock + terminal `PushSubscription` deactivation + idempotent `CUSTOMER_APPROACHING_1`/`CUSTOMER_APPROACHING_3` outbox rows), `createWalkInToken()` (`source = "WALK_IN"`), `requeueSkippedToken()` (preserving immutable `SKIPPED` original while allocating tail `QueueCounter` token + `TOKEN_REQUEUED`), `getBranchQueueOverview()` (single-SQL conditional KPIs + active groups), and `getBranchTokenHistory()` (keyset cursor pagination, `limit <= 50`).
+- Extracted `resolveEffectiveBranchSettings()` and `allocateNextQueueTokenNumber()` in `src/server/services/token-service.ts` for shared reuse between `TokenService` and `QueueService`.
+- Added RBAC/CSRF-protected API routes: `GET /api/owner/branches/[branchId]/queue` (`ETag`/`304`), `POST /api/owner/branches/[branchId]/queue/call-next`, `POST /api/owner/branches/[branchId]/tokens/walk-in`, `PATCH /api/owner/branches/[branchId]/tokens/[tokenId]/status`, `POST /api/owner/branches/[branchId]/tokens/[tokenId]/requeue`, and `GET /api/owner/branches/[branchId]/history`.
+- Added unit tests (`tests/unit/queue-state-machine.test.ts`: `UT-STM-01..05`) and live PostgreSQL integration & concurrency suite (`tests/integration/fifo-queue-engine.test.ts`: `IT-QUE-01`, `IT-QUE-02`, cursor pagination/search, `CT-05`, `CT-06`).
+
+---
+
+## [0.8.1 — Surgical Bug Hunt (Phase 6 & Phase 7 Intake / Branch Settings)] - 2026-11-12
+
+### Fixed
+- **CustomerIntakeForm `404` Error Handling & Non-HTTPS UUID Generation (`src/features/public-intake/components/customer-intake-form.tsx`)**: Removed the stale Phase 6 `404` stub message so missing/stale branch responses parse and display real API error envelopes (`json.error?.message`), guarded JSON body parsing against malformed responses, and replaced the static hardcoded fallback UUID with RFC 4122 v4 generation via `crypto.getRandomValues()` when `crypto.randomUUID` is unavailable (e.g., mobile devices testing over plain HTTP LAN origins).
+- **Secondary Branch Settings Inheritance (`src/server/services/branch-service.ts`)**: Copied `dayResetTime`, `notifyDelayThresholdMinutes`, and `longQueueAlertThreshold` from organization default `SalonSettings` when creating new branches so custom reset schedules and alert thresholds propagate consistently.
+
+### Added
+- Regression tests in `tests/unit/customer-intake-bug-hunt.test.tsx` (`BUG-01`, `BUG-02`) and `tests/integration/token-generation-concurrency.test.ts` (`BUG-03`).
+
+---
+
 ## [0.8.0 — Phase 7: Token Generation Engine & Concurrency] - 2026-11-12
 
 ### Added

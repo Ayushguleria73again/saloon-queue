@@ -122,4 +122,3 @@ export async function POST(
     return jsonErrorResponse(error, requestId);
   }
 }
-

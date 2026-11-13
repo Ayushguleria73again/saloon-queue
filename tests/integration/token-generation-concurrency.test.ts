@@ -676,4 +676,50 @@ describe("Phase 7 Token Generation, Outbox & PostgreSQL Concurrency Suite", () =
     });
     expect(counter?.lastNumber).toBe(1);
   });
+
+  it("BUG-03: newly created secondary branch inherits organization dayResetTime and notification thresholds", async () => {
+    const salon = await seedSalonWithTwoBranches("bug03");
+
+    await withBranchDb(
+      salon.organizationId,
+      salon.branch1.id,
+      async (tx) => {
+        await tx.salonSettings.updateMany({
+          where: { organizationId: salon.organizationId, branchId: null },
+          data: {
+            dayResetTime: "04:00",
+            notifyDelayThresholdMinutes: 25,
+            longQueueAlertThreshold: 18,
+          },
+        });
+      },
+      runtimePrisma,
+    );
+
+    const lateNightBranch = await createBranch(
+      await authorizeTenantAction({
+        session: salon.ownerClaims,
+        requiredPermission: "BRANCH_MANAGE",
+        client: runtimePrisma,
+      }),
+      {
+        name: "Night Lounge",
+        slug: "night-lounge",
+        timezone: "Asia/Kolkata",
+      },
+      { client: runtimePrisma },
+    );
+
+    const branchSettings = await adminTestPrisma.salonSettings.findUnique({
+      where: {
+        organizationId_branchId: {
+          organizationId: salon.organizationId,
+          branchId: lateNightBranch.id,
+        },
+      },
+    });
+    expect(branchSettings?.dayResetTime).toBe("04:00");
+    expect(branchSettings?.notifyDelayThresholdMinutes).toBe(25);
+    expect(branchSettings?.longQueueAlertThreshold).toBe(18);
+  });
 });

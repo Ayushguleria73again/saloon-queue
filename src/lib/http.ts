@@ -22,3 +22,36 @@ export function jsonErrorResponse(error: unknown, requestId = createRequestId())
     },
   });
 }
+
+export function jsonWithEtag(
+  requestHeaders: Pick<Headers, "get">,
+  payload: unknown,
+  requestId: string,
+  extraHeaders: Record<string, string> = {},
+): NextResponse {
+  const bodyJson = JSON.stringify(payload);
+  const etag = `"${crypto.createHash("sha1").update(bodyJson).digest("base64url")}"`;
+
+  if (requestHeaders.get("if-none-match") === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: {
+        ETag: etag,
+        "Cache-Control": "no-store",
+        "X-Request-Id": requestId,
+        ...extraHeaders,
+      },
+    });
+  }
+
+  return new NextResponse(bodyJson, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ETag: etag,
+      "Cache-Control": "no-store",
+      "X-Request-Id": requestId,
+      ...extraHeaders,
+    },
+  });
+}

@@ -125,7 +125,7 @@
 - **Expected Deliverables**: `QueueService`, walk-in & re-queue APIs, `/owner/history`.
 - **Acceptance Criteria**: Simultaneous `Call Next` calls never double-call the same token; walk-ins share same FIFO queue/counter; skipped re-queue creates new tail sequence preserving original history; invalid transitions return `409`.
 - **Testing Requirements**: `UT-STM-01..05`, `IT-QUE-01..02`, `CT-05`, `CT-06`.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `queue-state-machine.ts`, `QueueService`, 6 `/api/owner/branches/[branchId]/*` queue/history endpoints, `UT-STM-01..05`, `IT-QUE-01..02`, history pagination, `CT-05`, `CT-06`, `tsc`, `eslint`, `prettier`, `next build`; owner `/owner/queue` & `/owner/history` UI screens scheduled in Phase 10)
 
 ---
 
@@ -138,7 +138,7 @@
 - **Expected Deliverables**: Public token tracking page & APIs.
 - **Acceptance Criteria**: Raw phone never exposed publicly; `If-None-Match` returns `304`; self-cancel works ONLY in `WAITING` and is blocked/disabled in `CALLED` / `IN_SERVICE`.
 - **Testing Requirements**: `IT-PUB-03`, `IT-PUB-05`, `TI-06`.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `token-tracking-service.ts`, `GET /api/public/tokens/[publicId]` + `304 ETag`, `POST /api/public/tokens/[publicId]/cancel`, `/salon/[salonSlug]/[branchSlug]/token/[publicId]`, `TokenTrackerView`, `IT-PUB-03`, `IT-PUB-05`, `TI-06`, `tsc`, `eslint`, `prettier`, `next build`)
 
 ---
 
@@ -151,7 +151,7 @@
 - **Expected Deliverables**: Owner Dashboard, Live Queue Console, Settings UI, QR Studio (`QrService`).
 - **Acceptance Criteria**: Staff see only assigned branches & permitted buttons; downloaded QR scans directly to `/salon/{s}/{b}`; print view renders cleanly.
 - **Testing Requirements**: `E2E-01`, `E2E-02`, `E2E-04`, `E2E-05`.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete` (Verified 2026-11-12: `QrService`, `/api/owner/branches/[branchId]/qr` + `/qr/regenerate`, upgraded `/owner/dashboard`, `/owner/queue`, `/owner/history`, `/owner/qr`, `/owner/settings`, jsdom unit + live PG `QrService` tests, `tsc`, `eslint`, `prettier`, `next build`; Playwright E2E harness suite scheduled in Phase 16)
 
 ---
 
@@ -165,7 +165,7 @@
 - **Expected Deliverables**: Service worker, outbox worker, owner push onboarding & delivery logs UI.
 - **Acceptance Criteria**: New customer token pushes alert to all active owner/staff devices for that branch within seconds; `410` endpoints auto-deactivate; token creation succeeds even if push service fails.
 - **Testing Requirements**: `UT-PSH-01..02`, `NT-01`, `NT-02`, `NT-04`, `NT-05`, `NT-06`.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete`
 
 ---
 
@@ -179,7 +179,7 @@
 - **Expected Deliverables**: Customer push endpoints, milestone evaluator, opt-in UI.
 - **Acceptance Criteria**: Zero permission prompts before token creation; milestone alerts fire at most once even under queue fluctuations; denied permission never breaks status tracking.
 - **Testing Requirements**: `NT-03`, `IT-PUB-04`, `E2E-03`.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete`
 
 ---
 

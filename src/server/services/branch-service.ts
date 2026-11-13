@@ -3,12 +3,15 @@ import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { AuthorizedTenantContext } from "@/server/auth";
 import { branchCatalogCache } from "@/server/cache/branch-catalog-cache";
 import { withBranchDb, withTenantDb, type DbClient } from "@/server/db";
+import { nudgeOutboxWorker } from "@/server/jobs/runner";
+import { getRealtimeHub } from "@/server/realtime";
 import { generateOpaqueToken } from "@/server/security/tokens";
 import type { CreateBranchInput, UpdateBranchInput } from "@/features/branches/schemas";
 
 export interface BranchMutationMeta {
   ipAddressHash?: string;
   userAgent?: string;
+  now?: Date;
   client?: DbClient;
 }
 
@@ -151,8 +154,12 @@ export async function createBranch(
             enforceBusinessHours: orgDefaultSettings?.enforceBusinessHours ?? true,
             isAcceptingTokens: orgDefaultSettings?.isAcceptingTokens ?? true,
             requireValidQrToken: orgDefaultSettings?.requireValidQrToken ?? false,
+            dayResetTime: orgDefaultSettings?.dayResetTime ?? "00:00",
             estimatedBufferMinutes: orgDefaultSettings?.estimatedBufferMinutes ?? 0,
             customerPushThresholds: orgDefaultSettings?.customerPushThresholds ?? [3, 1],
+            notifyDelayThresholdMinutes:
+              orgDefaultSettings?.notifyDelayThresholdMinutes ?? 15,
+            longQueueAlertThreshold: orgDefaultSettings?.longQueueAlertThreshold ?? 10,
           },
         });
 
@@ -218,13 +225,21 @@ export async function updateBranch(
   input: UpdateBranchInput,
   meta: BranchMutationMeta = {},
 ) {
-  return withBranchDb(
+  const now = meta.now ?? new Date();
+  let queuedDelayNotifications = false;
+
+  const result = await withBranchDb(
     ctx.organizationId,
     branchId,
     async (tx) => {
       const existing = await tx.branch.findFirst({
         where: { id: branchId, organizationId: ctx.organizationId },
-        select: { id: true },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          organization: { select: { slug: true } },
+        },
       });
 
       if (!existing) {
@@ -302,6 +317,57 @@ export async function updateBranch(
             ...input.settings,
           },
         });
+
+        if (input.settings.isAcceptingTokens === false) {
+          const subscribedWaiting = await tx.token.findMany({
+            where: {
+              organizationId: ctx.organizationId,
+              branchId,
+              status: "WAITING",
+              pushSubscriptions: {
+                some: {
+                  subscriberType: "CUSTOMER",
+                  isActive: true,
+                },
+              },
+            },
+            select: {
+              id: true,
+              publicId: true,
+              tokenNumber: true,
+            },
+          });
+
+          if (subscribedWaiting.length > 0) {
+            const bucketHour = Math.floor(now.getTime() / 3_600_000);
+            const reason =
+              typeof input.settings.queuePausedReason === "string"
+                ? input.settings.queuePausedReason
+                : undefined;
+
+            await tx.notificationEvent.createMany({
+              data: subscribedWaiting.map((token) => ({
+                organizationId: ctx.organizationId,
+                branchId,
+                tokenId: token.id,
+                eventType: "QUEUE_DELAYED",
+                idempotencyKey: `token:${token.id}:DELAYED:${bucketHour}`,
+                status: "PENDING",
+                payload: {
+                  tokenId: token.id,
+                  publicId: token.publicId,
+                  tokenNumber: token.tokenNumber,
+                  branchId,
+                  branchName: existing.name,
+                  ...(reason ? { reason } : {}),
+                  targetUrl: `/salon/${existing.organization.slug}/${existing.slug}/token/${token.publicId}`,
+                },
+              })),
+              skipDuplicates: true,
+            });
+            queuedDelayNotifications = true;
+          }
+        }
       }
 
       await tx.auditLog.create({
@@ -336,4 +402,17 @@ export async function updateBranch(
     },
     meta.client,
   );
+
+  if (queuedDelayNotifications) {
+    nudgeOutboxWorker();
+  }
+
+  getRealtimeHub().publishQueueMutation({
+    organizationId: ctx.organizationId,
+    branchId,
+    action: "BRANCH_SETTINGS_UPDATED",
+    timestamp: new Date().toISOString(),
+  });
+
+  return result;
 }

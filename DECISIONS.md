@@ -98,5 +98,22 @@ This document records all major architectural decisions, rationale, alternatives
   1. Newly registered `Organization` accounts receive **`ACTIVE`** status immediately.
   2. **Email verification is required** (`User.emailVerifiedAt`) before full owner sign-in/dashboard access.
   3. Platform Administrators retain full **suspension (`SUSPENDED`) and deactivation (`DEACTIVATED`)** controls over any organization.
+
+### `ADR-016`: Realtime SSE Architecture with Burst Coalescing & Single-Pass Snapshot Fan-Out
+- **Context**: Open browser screens (Owner `/owner/queue` and Customer `/token/[publicId]`) require sub-second live updates without manual page refreshes, while avoiding database query amplification (thundering herd) when dozens of customers simultaneously watch the same branch.
+- **Decision**:
+  1. **RealtimeHub Singleton**: Central hub in `src/server/realtime/hub.ts` managing branch-scoped (`branch:{organizationId}:{branchId}`) and token-scoped listener streams.
+  2. **Single-Pass Projection & 50ms Coalescing (`PT-02`)**:
+     - Rapid bursts of queue mutations on a branch are coalesced over a `50ms` trailing debounce window.
+     - A single indexed query pass (`computeBranchWaitSnapshot`) recomputes wait times and queue positions for all active tokens in that branch.
+     - Memory fan-out distributes each subscribed customer stream **strictly its own sanitized slice** (`status`, `queuePosition`, `peopleAhead`, `estimatedWaitMinutes`, `updatedAt`, `requeuedTo`), preventing cross-customer PII leakage while bounding database queries to `<= 2` even under 40+ concurrent listeners.
+  3. **Resilient Client Hook (`useRealtimeStream`)**:
+     - Connects via native `EventSource` with a `25s` keep-alive ping (`: ping\n\n`).
+     - Resynchronizes immediately on `visibilitychange` (`visible`) and `window.online` using lightweight `If-None-Match` (`ETag`) requests (`304 Not Modified`).
+     - Gracefully degrades to visibility-aware polling (`5s` active, paused hidden) if `EventSource` encounters 3 consecutive network failures.
+  4. **PostgreSQL LISTEN/NOTIFY Adapter**:
+     - Primary single-instance operation uses Node in-memory event fan-out with zero network hop latency.
+     - Horizontal multi-instance operation (`REALTIME_TRANSPORT=pg-listen`) broadcasts mutations across container instances using PostgreSQL `LISTEN/NOTIFY` via `DIRECT_URL`.
+
   4. Registration enforces **abuse prevention and rate limiting** (`5 req / 1 hr` per IP, honeypot trap, disposable/spam throttling).
   5. Optional manual platform approval (`PENDING` mode) remains configurable via `REQUIRE_ADMIN_TENANT_APPROVAL` for future policy toggles.
