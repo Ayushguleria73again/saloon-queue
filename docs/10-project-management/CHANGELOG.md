@@ -2,6 +2,104 @@
 
 ---
 
+## [0.18.0 — Phase 17: Production Deployment] - 2026-11-13
+
+### Added
+- **Multi-Stage Production Docker Packaging (`Dockerfile`)**:
+  - Implemented secure 3-stage `node:20-alpine` build (`deps`, `builder`, `runner`) utilizing Next.js standalone server (`output: "standalone"`).
+  - Enforced unprivileged container execution via non-root system user `nextjs:nodejs` (UID 1001) with strict file ownership.
+  - Built-in container healthcheck querying `GET /api/health` with 5s timeout, 30s interval, and 3 retries.
+- **Reverse Proxy Gateway Configuration (`docker/nginx/nginx.conf`)**:
+  - Enforced unbuffered Server-Sent Events (SSE) streaming (`proxy_buffering off;`, `X-Accel-Buffering: no;`, `proxy_read_timeout 120s;`) for real-time queue synchronization.
+  - Enforced Service Worker lifecycle freshness: served `/sw.js` with `Cache-Control: no-cache, no-store, must-revalidate` and `Service-Worker-Allowed: /`.
+  - Configured TLS termination readiness, gzip static asset compression, and strict upstream reverse proxy routing to Next.js standalone container.
+- **Production Compose Orchestration (`docker-compose.prod.yml`)**:
+  - Orchestrated 3 isolated services: `db` (Postgres 16 Alpine), `app` (standalone Next.js), and `proxy` (Nginx reverse proxy on port 80).
+  - Enforced strict database role separation: `DATABASE_URL` runtime and worker queries execute exclusively under unprivileged `app_runtime` (`NOSUPERUSER NOBYPASSRLS`), ensuring PostgreSQL Row-Level Security (`SET LOCAL app.current_organization_id`) cannot be bypassed, while schema migrations run via `DIRECT_URL` as `salonflow_admin`.
+- **Automated Backup & Restore Drill Scripts**:
+  - Built `scripts/backup.sh` generating timestamped, custom-format compressed dumps (`pg_dump -Fc --no-owner --no-acl`) with automatic 7-day retention pruning.
+  - Built `scripts/restore.sh` performing verified database restore drills (`pg_restore --clean --if-exists`), re-granting `app_runtime` permissions and auditing `relrowsecurity` on all tenant tables.
+  - Built `scripts/deploy.sh` running pre-flight environment checks, database migrations (`prisma migrate deploy`), permission verification, Platform Admin seeding, and RLS security auditing.
+- **Platform Admin CLI Provisioning Tool (`scripts/seed-platform-admin.ts`)**:
+  - Created idempotent CLI script supporting configurable `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_NAME` with bcrypt hashing and active status enforcement.
+  - Added npm scripts to `package.json`: `npm run seed:admin`, `npm run db:backup`, `npm run db:restore`, `npm run deploy`.
+- **Production Deployment Smoke Suite**:
+  - Authored `tests/integration/production-deployment-smoke.test.ts` (7/7 tests passing) verifying Row-Level Security on all tenant tables, `app_runtime` unprivileged boundaries, `nginx.conf` header compliance, `Dockerfile` multi-stage security, `docker-compose.prod.yml` service wiring, and backup/restore script integrity.
+
+---
+
+## [0.17.0 — Phase 16: Security, Concurrency and Performance Testing] - 2026-11-13
+
+### Added
+- **Security Headers Hardening**:
+  - Configured comprehensive security headers in `next.config.ts` matching `/(.*)`: `Strict-Transport-Security` (`max-age=31536000; includeSubDomains`), `Content-Security-Policy` (`default-src 'self'`, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+  - Added security headers injection in Next.js middleware (`src/middleware.ts`) for all evaluated routes.
+- **CSRF Origin/Host Defense**:
+  - Enforced `assertSameOriginRequest` across all state-mutating administrative routes (`PATCH /api/admin/tenants/[organizationId]/status`, `POST /api/admin/jobs/[eventId]/retry`).
+  - Verified cross-origin rejection (`403 FORBIDDEN: Cross-origin state mutation blocked`) against spoofed or mismatched `Origin` and `Host` headers.
+- **Edge Rate Limiting Enforcement**:
+  - Validated LRU sliding-window capacity eviction and standard response headers (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`) across all 7 production rate-limiting rules (`publicTokenIp`, `publicTokenMobile`, `publicPushSubscribe`, `publicTokenRead`, `publicTokenCancel`, `authRegisterSalon`, `ownerPushTest`).
+- **Honeypot Bot Trap & SSRF Protection**:
+  - Verified honeypot bot trap rejection on salon onboarding (`website` field) and public intake forms (`website` field).
+  - Verified strict SSRF blocking in `isValidPushEndpoint` preventing loopback (`127.0.0.1`), link-local metadata (`169.254.169.254`), private RFC 1918 subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), and non-HTTPS URLs while permitting valid public push services.
+- **Latency Benchmarking (`PT-01` – `PT-03`)**:
+  - Benchmarked 50 concurrent branch reads achieving `p95 = 22.1ms` (target `< 80ms`).
+  - Benchmarked 20 burst token creation writes with advisory locks achieving `p95 = 130.9ms` (target `< 150ms`).
+  - Verified single-pass SSE fan-out query budget (`PT-02` <= 2 queries for 40 listeners) and ETag 304 polling efficiency (`PT-03`).
+- **Verification Suite**:
+  - Added comprehensive test suite `tests/integration/security-concurrency-performance.test.ts` (7 tests covering `PT-01`, rate limiting, headers, CSRF, honeypot, SSRF).
+  - Passed complete test gate: 95/95 unit tests green, 66/66 integration tests green across 17 suites, 0 TS errors, 0 ESLint warnings, and Next.js production build passing cleanly.
+
+---
+
+## [0.16.0 — Phase 15: Platform Administration] - 2026-11-13
+
+### Added
+- **Platform Administration Domain Service (`PlatformAdminService`)**: Built `src/server/services/platform-admin-service.ts` leveraging `withSystemDb` and non-PII projections to provide global SaaS operator oversight:
+  - System-wide operational overview (`getPlatformOverview`) aggregating organizations (active, suspended), total branches, today's platform token throughput, and outbox job states (`PENDING`, `PROCESSING`, `FAILED`, `DEAD_LETTER`).
+  - Tenant directory with cursor/offset pagination and status filters (`listTenants`), returning organization slugs, owner contact, branch count, active tokens, and current status.
+  - Tenant status toggle (`updateTenantStatus`) supporting `ACTIVE` <-> `SUSPENDED` with mandatory operator reason, audit logging (`TENANT_STATUS_CHANGED`), and immediate user session invalidation via `sessionVersion` increment.
+  - Platform-wide outbox job inspection (`listPlatformJobs`) with status filters and safe pagination, projecting only non-PII operational payloads.
+  - Dead-letter outbox retry mechanism (`retryPlatformJob`) resetting attempt counts and error messages with immediate worker dispatch nudges.
+  - Comprehensive platform health diagnostics (`getPlatformHealthDetails`) reporting live PostgreSQL connection pool metrics, database uptime, migrations count, and active background worker status.
+- **Strict Operator RBAC (`requirePlatformAdmin`)**: Built centralized admin guard enforcing `user.isPlatformAdmin === true` and active account status, rejecting unauthorized users with `403 FORBIDDEN` (`ADMIN_FORBIDDEN`).
+- **Zero Customer PII Projection (`IT-ADM-02`)**: Ensured all platform administration queries, DTOs, and UIs strictly exclude customer names, mobile numbers, notes, or PII.
+- **Immediate Tenant Invalidation on Suspension (`IT-ADM-01`)**: Enforced immediate blocking of public intake (`403 TENANT_SUSPENDED`) and owner/staff dashboard operations across all branches upon suspension, while reactivating restores normal operation.
+- **REST Route Handlers**:
+  - `GET /api/admin/overview`: System operational overview.
+  - `GET /api/admin/tenants`: Tenant directory with search and status filtering.
+  - `PATCH /api/admin/tenants/[organizationId]/status`: Tenant status toggle with reason and audit log.
+  - `GET /api/admin/jobs`: Background job inspection.
+  - `POST /api/admin/jobs/[eventId]/retry`: Dead-letter job retry.
+  - `GET /api/admin/health/details`: System telemetry and database metrics.
+- **Operator Admin Console UI**: Built `/admin`, `/admin/tenants`, and `/admin/jobs` wrapped inside `AdminShell` (`AdminOverview`, `TenantsDirectory` with modal confirmation, and `BackgroundJobsView` with retry triggers) styled cleanly with semantic design tokens.
+- **Verification Suite**: Created unit test suite (`tests/unit/admin-schemas.test.ts`) and integration test suite (`tests/integration/platform-administration.test.ts`) verifying `IT-ADM-01`, `IT-ADM-02`, dead-letter retry, non-admin RBAC blocks, and system diagnostics with 100% test pass rate.
+
+---
+
+## [0.15.0 — Phase 14: Analytics & Reporting] - 2026-11-13
+
+### Added
+- **Analytics Domain Service (`AnalyticsService`)**: Built `src/server/services/analytics-service.ts` leveraging PostgreSQL composite indexed SQL aggregations (`COUNT(*) FILTER`, `AVG(EXTRACT(EPOCH FROM ...))`, `DATE_TRUNC`) under tenant RLS (`withTenantDb`), computing operational KPIs, time-bucketed trend series (`day`, `week`, `month`), top requested services, and cross-branch comparison metrics in single queries with zero customer PII leakage.
+- **Strict Staff RBAC & Branch Scoping**: Gated analytics under `ANALYTICS_VIEW` permission, intersecting requested branch filters against verified `StaffBranchAccess` for staff members (`BRANCH_ACCESS_DENIED`) and throwing `NotFoundError` for cross-tenant branch queries.
+- **REST API Route**: Built `GET /api/owner/analytics` (`src/app/api/owner/analytics/route.ts`) validating queries (`range`, `branchId`, `from`, `to`, `granularity`) via Zod (`analyticsQuerySchema`).
+- **Owner Analytics UI**: Built `/owner/analytics` (`src/app/(owner)/owner/analytics/page.tsx` & `src/features/analytics/components/analytics-dashboard.tsx`) featuring date range presets (`Today`, `7 Days`, `30 Days`, `90 Days`, `Custom`), branch selector, 6 KPI stat cards, visual responsive volume & completion trend chart, ranked top services cards with revenue progress bars, and side-by-side multi-branch performance table styled purely with semantic Tailwind tokens.
+- **Verification Suite**: Created unit tests (`tests/unit/analytics-schemas.test.ts`) and live PostgreSQL integration tests (`tests/integration/analytics-reporting.test.ts`: `IT-ANA-01`, cross-tenant isolation, Staff RBAC & branch assignment).
+
+---
+
+## [0.14.0 — Phase 13: Real-Time Queue Updates] - 2026-11-13
+
+### Added
+- **RealtimeHub & Burst Coalescing**: Built central `RealtimeHub` singleton (`src/server/realtime/hub.ts`) managing tenant/branch scoped subscribers (`branch:{organizationId}:{branchId}`), supporting in-memory event fan-out with 50ms burst coalescing + PostgreSQL `LISTEN/NOTIFY` over `DIRECT_URL`.
+- **Single-Pass Projection Fan-Out (`PT-02`)**: Implemented single-pass snapshot projection that evaluates station simulation and personalizes non-PII token updates across 40+ concurrent SSE customer listeners with `<= 2` database queries per queue mutation without N+1 query amplification.
+- **Server-Sent Events Route Handlers**: Built `GET /api/owner/branches/[branchId]/queue/events` and `GET /api/public/tokens/[publicId]/events` streaming `text/event-stream` with 25s keepalive `: ping\n\n`, `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no`, and terminal auto-close on `COMPLETED`/`CANCELLED`/`NO_SHOW`.
+- **Resilient Client Hook (`useRealtimeStream`)**: Built `src/features/queue/hooks/use-realtime-stream.ts` managing native `EventSource`, `visibilitychange` + `online` resynchronization via `If-None-Match` (`ETag`), and graceful fallback to 5s polling upon 3 consecutive network failures.
+- **UI Integration**: Wired `useRealtimeStream` into `/owner/queue` (`LiveQueueConsole`) and `/salon/[salonSlug]/[branchSlug]/token/[publicId]` (`TokenTrackerView`) for instant sub-second live queue updates.
+- **Verification Suite**: Added comprehensive integration test suite `tests/integration/realtime-sse-stream.test.ts` covering `PT-02` (40 concurrent listeners, query budget <= 2), `IT-RT-01` (status advance, delivery, terminal close), `IT-RT-02` (skipped re-queue link broadcast), `IT-RT-03` (50ms rapid mutation burst coalescing), `PT-03` (`ETag` `304` zero body overhead), and `IT-RT-04` (headers, keepalive, and clean abort).
+
+---
+
 ## [0.13.1 — Bug Hunt: Skipped Re-queue Push Migration & Endpoint Deduplication] - 2026-11-13
 
 ### Fixed

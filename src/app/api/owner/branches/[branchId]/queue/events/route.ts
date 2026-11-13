@@ -70,3 +70,4 @@ export async function GET(
     return jsonErrorResponse(error, requestId);
   }
 }
+

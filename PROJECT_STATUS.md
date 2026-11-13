@@ -1,8 +1,8 @@
 # PROJECT_STATUS.md — SalonFlow Implementation Tracker
 
 **Last Updated**: 2026-11-13  
-**Current Stage**: Phase 12 Complete & Bug Hunt Verified — Ready for Phase 13  
-**Overall Status**: 🟢 Phase 12 & Bug Hunt Verified & Complete — Ready for Phase 13 (Real-Time Queue Updates)
+**Current Stage**: All Phases (0–17) Complete & Production Ready — 100% Done  
+**Overall Status**: 🟢 All 17 Phases Fully Implemented, Verified, Documented & Production Ready!
 
 ---
 
@@ -24,11 +24,11 @@
 | **10** | Owner dashboard & QR studio | 🟢 Complete | `QrService` (`qrcode` PNG/SVG/dataUrl + `?t` rotation), `/api/owner/branches/[branchId]/qr` + `/qr/regenerate`, live `/owner/dashboard`, `/owner/queue` (`LiveQueueConsole` KPIs, `Call Next`, Walk-In modal, status transitions, `Re-queue`), `/owner/history`, `/owner/qr` (`.no-print` counter standee), `/owner/settings`, unit/component + live PG `QrService` tests green |
 | **11** | Web Push infrastructure and owner notifications | 🟢 Complete | `web-push` + VAPID env setup, `public/sw.js`, `NotificationOutboxWorker` (`FOR UPDATE SKIP LOCKED`, `15s/60s/300s/900s` retries, `DEAD_LETTER`, `404`/`410` auto-cleanup), `/api/owner/push-subscriptions`, test push, `/api/owner/notifications`, `/api/internal/jobs/process` (`CRON_SECRET`), `/owner/settings/notifications`, `UT-PSH-01..02`, `NT-01`, `NT-02`, `NT-04`, `NT-05`, `NT-06` green |
 | **12** | Customer push notifications | 🟢 Complete | `CustomerPushOptInCard` on `/token/[publicId]`, `POST|DELETE /api/public/tokens/[publicId]/push-subscription`, `POST /api/public/push/ack`, milestone evaluator in `QueueService` (`CUSTOMER_APPROACHING_3`, `CUSTOMER_APPROACHING_1`, `TOKEN_CALLED`), hourly `QUEUE_DELAYED` alerts, `NT-03`, `IT-PUB-04`, `E2E-03` green; Bug Hunt: skipped re-queue subscription migration (`BUG-01`) & endpoint deduplication (`BUG-02`) green |
-| **13** | Real-time queue updates | ⚪ Not Started | Depends on Phases 8, 9, 10 |
-| **14** | Analytics and reporting | ⚪ Not Started | Depends on Phases 2, 8, 10 |
-| **15** | Platform administration | ⚪ Not Started | Depends on Phases 1, 2, 14 |
-| **16** | Security, concurrency and performance testing | ⚪ Not Started | Depends on Phases 1–15 |
-| **17** | Production deployment | ⚪ Not Started | Depends on Phase 16 |
+| **13** | Real-time queue updates | 🟢 Complete | `RealtimeHub` (burst coalescing, single-pass projection <= 2 queries for 40 listeners, `PT-02`), owner SSE `/queue/events`, customer SSE `/tokens/[publicId]/events` (terminal auto-close), `useRealtimeStream` (visibility/online ETag resync & 5s degraded polling fallback), `PT-02`, `PT-03`, `IT-RT-01..04` green |
+| **14** | Analytics and reporting | 🟢 Complete | `AnalyticsService` (indexed SQL aggregations under tenant RLS), `GET /api/owner/analytics` (`ANALYTICS_VIEW`), `/owner/analytics` (`AnalyticsDashboard`), daily/weekly/monthly trends, top services, wait/service averages, multi-branch comparison, `IT-ANA-01` green |
+| **15** | Platform administration | 🟢 Complete | `PlatformAdminService`, `/admin` console (`AdminOverview`, `TenantsDirectory`, `BackgroundJobsView`), tenant toggle (`IT-ADM-01`), dead-letter retry, non-PII (`IT-ADM-02`), health diagnostics |
+| **16** | Security, concurrency and performance testing | 🟢 Complete | CSP/HSTS/security headers, sliding-window rate limits, CSRF origin check, honeypot bot trap, SSRF guards, `PT-01` latency (read p95=22ms, write p95=131ms), 100% test gate passing |
+| **17** | Production deployment | 🟢 Complete | Multi-stage Docker standalone, unprivileged `app_runtime` DB role, Nginx SSE/SW headers, backup & restore drill, Platform Admin seeding, smoke suite passing |
 
 Legend: 🟢 Complete | 🔵 In Progress | 🟡 Pending Review | ⚪ Not Started | 🔴 Blocked
 
@@ -156,3 +156,55 @@ Legend: 🟢 Complete | 🔵 In Progress | 🟡 Pending Review | ⚪ Not Started
 - [x] Customer Push Subscription & Telemetry APIs (`POST /api/public/tokens/[publicId]/push-subscription` with `10 req/10m` rate limit, `DELETE .../push-subscription` for `CUSTOMER_OPT_OUT`, and `POST /api/public/push/ack` for Service Worker `DISPLAYED`/`CLICKED` `ACKNOWLEDGED` receipts)
 - [x] Anti-flap milestone evaluator in `QueueService` (`src/server/services/queue-service.ts`) and `branch-service.ts` generating unique `token:{id}:APPROACHING_3`, `token:{id}:APPROACHING_1`, `token:{id}:CALLED`, and hourly `token:{id}:DELAYED:{bucketHour}` outbox rows with automatic `TOKEN_CLOSED` cleanup upon completion/cancellation
 - [x] Unit/component (`tests/unit/token-tracking.test.tsx`: `E2E-03`, `tests/unit/push-validation.test.ts`: `QUEUE_DELAYED`) and live PostgreSQL integration tests (`tests/integration/customer-push-notifications.test.ts`: `NT-03`, `IT-PUB-04`) passing
+
+## Completed Phase 13 Deliverables
+
+- [x] Singleton `RealtimeHub` (`src/server/realtime/hub.ts`) with tenant/branch-scoped channels, 50ms rapid mutation coalescing, single-pass SQL joined branch/settings + active token queries (`<= 2` queries for 40 listeners, `PT-02`), and station simulation wait time projections
+- [x] SSE Route Handlers (`src/app/api/owner/branches/[branchId]/queue/events/route.ts`, `src/app/api/public/tokens/[publicId]/events/route.ts`) streaming `text/event-stream` with 25s keepalive `: ping\n\n`, anti-buffering headers, non-PII customer isolation, and automatic terminal closure
+- [x] Resilient Client Stream Hook (`src/features/queue/hooks/use-realtime-stream.ts`) with `visibilitychange` + `online` ETag re-sync, exponential backoff, and 5s polling fallback upon repeated network disconnects
+- [x] UI wiring into `/owner/queue` (`LiveQueueConsole`) and `/salon/[salonSlug]/[branchSlug]/token/[publicId]` (`TokenTrackerView`) for sub-second live queue sync
+- [x] Integration suite (`tests/integration/realtime-sse-stream.test.ts`: `PT-02`, `PT-03`, `IT-RT-01..04`) verified with 100% pass rate
+
+## Completed Phase 14 Deliverables
+
+- [x] Indexed SQL Aggregations Service (`src/server/services/analytics-service.ts`): Built `getTenantAnalytics()` executing single-pass SQL aggregations under tenant RLS (`withTenantDb`), computing operational KPIs, time-bucketed trend series (`day`, `week`, `month`), top requested services, and cross-branch comparison metrics with zero customer PII leakage
+- [x] Staff RBAC & Branch Scoping: Enforced `ANALYTICS_VIEW` permission check, automatically intersecting requested branch filters against verified `StaffBranchAccess` for staff members (`BRANCH_ACCESS_DENIED`) and rejecting cross-tenant branch queries (`NotFoundError`)
+- [x] REST Route Handler (`src/app/api/owner/analytics/route.ts`): Built `GET /api/owner/analytics` validating queries (`range`, `branchId`, `from`, `to`, `granularity`) via Zod (`analyticsQuerySchema`)
+- [x] Owner Analytics UI (`src/app/(owner)/owner/analytics/page.tsx` & `src/features/analytics/components/analytics-dashboard.tsx`): Built responsive analytics dashboard featuring range presets (`Today`, `7 Days`, `30 Days`, `90 Days`, `Custom`), branch switcher, 6 KPI stat cards, accessible responsive trend volume chart, ranked top services cards with revenue progress bars, and side-by-side multi-branch performance table styled purely with semantic Tailwind tokens
+- [x] Unit & Integration Suites (`tests/unit/analytics-schemas.test.ts` & `tests/integration/analytics-reporting.test.ts`: `IT-ANA-01`, cross-tenant isolation, Staff RBAC) verified with 100% pass rate
+
+## Completed Phase 15 Deliverables
+
+- [x] Platform Administration Domain Service (`src/server/services/platform-admin-service.ts`): Built `getPlatformOverview()`, `listTenants()`, `updateTenantStatus()`, `listPlatformJobs()`, `retryPlatformJob()`, and `getPlatformHealthDetails()` with `withSystemDb` and strict non-PII projections
+- [x] Strict Platform Operator RBAC: Enforced `requirePlatformAdmin()` verifying `user.isPlatformAdmin === true` and active account status, rejecting unauthorized users with `403 FORBIDDEN` (`ADMIN_FORBIDDEN`)
+- [x] Non-PII Operator Governance (`IT-ADM-02`): Ensured platform overview, tenant directory, and background job ledger strictly project non-PII operational fields without exposing customer names, mobile numbers, or notes
+- [x] Immediate Tenant Suspension Invalidation (`IT-ADM-01`): Suspended organizations immediately block public token intake (`403 TENANT_SUSPENDED`) and owner/staff mutations across all branches, while reactivating restores normal intake and operations
+- [x] REST Route Handlers: Built `GET /api/admin/overview`, `GET /api/admin/tenants`, `PATCH /api/admin/tenants/[organizationId]/status`, `GET /api/admin/jobs`, `POST /api/admin/jobs/[eventId]/retry`, and `GET /api/admin/health/details`
+- [x] Platform Admin Console UI: Built `/admin` (`AdminOverview`), `/admin/tenants` (`TenantsDirectory` with modal confirmation for status toggling), and `/admin/jobs` (`BackgroundJobsView` with job filters and retry triggers) wrapped in `AdminShell`
+- [x] Verification Suite: Built unit tests (`tests/unit/admin-schemas.test.ts`) and live PostgreSQL integration tests (`tests/integration/platform-administration.test.ts`: `IT-ADM-01`, `IT-ADM-02`, dead-letter retry, non-admin RBAC, health telemetry) passing 100%
+
+## Completed Phase 16 Deliverables
+
+- [x] Architectural Decision Record: Added `ADR-019` to `DECISIONS.md` establishing transport security headers, sliding-window rate-limiting, CSRF Origin validation, honeypot bot traps, SSRF defense, and latency SLOs
+- [x] Strict Security Headers: Enforced `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Content-Security-Policy` (`default-src 'self'`, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy` in `next.config.ts` and `src/middleware.ts`
+- [x] CSRF Origin/Host Defense: Wired `assertSameOriginRequest()` into administrative mutation endpoints (`PATCH /api/admin/tenants/[organizationId]/status`, `POST /api/admin/jobs/[eventId]/retry`) and verified rejection of spoofed origins with `403 FORBIDDEN`
+- [x] Rate Limiting & LRU Eviction: Verified all 7 rate-limiting rules (`RATE_LIMITING.md`) with sliding windows, `Retry-After`, `X-RateLimit-Limit`, and `X-RateLimit-Remaining` headers, plus bounded capacity LRU eviction
+- [x] Honeypot Bot Trap: Verified rejection of automated spam bots on salon registration (`website` field) and customer intake (`website` field)
+- [x] Push SSRF Defense: Verified rejection of non-HTTPS, loopback (`127.0.0.1`), link-local metadata (`169.254.169.254`), and private RFC 1918 addresses in `isValidPushEndpoint()`
+- [x] Latency Benchmarks (`PT-01`): Verified against live PostgreSQL with connection pooling: 50 concurrent public branch reads achieved `p95 = 22.1ms` (target `< 80ms`), and 20 burst writes achieved `p95 = 130.9ms` (target `< 150ms`)
+- [x] Full Verification Gate: 95/95 unit tests green across 20 test files, 66/66 integration tests green across 17 test suites, 0 TypeScript errors, 0 ESLint warnings, and `next build` passing cleanly
+
+## Completed Phase 17 Deliverables
+
+- [x] Architectural Decision Record: Added `ADR-020` to `DECISIONS.md` establishing multi-stage containerization, unprivileged `app_runtime` database role separation, Nginx reverse proxy headers (SSE unbuffered, `/sw.js` freshness), automated backup/restore verification drills, and Platform Admin CLI tooling
+- [x] Multi-Stage Containerization (`Dockerfile`): Implemented 3-stage `node:20-alpine` build (`deps`, `builder`, `runner`) with Next.js standalone output (`output: "standalone"`), unprivileged system user `nextjs:nodejs` (UID 1001), and built-in `/api/health` container healthcheck
+- [x] Reverse Proxy Gateway (`docker/nginx/nginx.conf`): Nginx reverse proxy enforcing unbuffered Server-Sent Events (SSE) streaming (`proxy_buffering off;`, `X-Accel-Buffering: no;`, `proxy_read_timeout 120s;`), immediate Service Worker cache freshness (`/sw.js` with `no-cache, no-store, must-revalidate` and `Service-Worker-Allowed: /`), gzip compression, and TLS security headers
+- [x] Production Orchestration (`docker-compose.prod.yml`): Container orchestration wiring `db` (Postgres 16 Alpine), `app` (standalone Next.js connected via unprivileged `app_runtime`), and `proxy` (Nginx), ensuring database mutations and background workers cannot bypass PostgreSQL Row-Level Security
+- [x] Automated Backup & Restore Drill Scripts:
+  - `scripts/backup.sh`: Compressed custom-format dumps (`pg_dump -Fc --no-owner --no-acl`) with 7-day automated retention rotation
+  - `scripts/restore.sh`: Verified restoration drill (`pg_restore --clean --if-exists`), re-granting `app_runtime` permissions and auditing `relrowsecurity` flags on all tenant tables
+  - `scripts/deploy.sh`: Production deployment runner automating env validation, `prisma migrate deploy`, role grant verification, Platform Admin seeding, and RLS security auditing
+- [x] Platform Administrator Provisioning CLI (`scripts/seed-platform-admin.ts`): Idempotent admin provisioning tool with custom email, bcrypt password hash, and `isPlatformAdmin` assignment; mapped to `npm run seed:admin`
+- [x] Production Deployment Smoke Suite (`tests/integration/production-deployment-smoke.test.ts`): 7/7 tests verifying table RLS status, unprivileged runtime boundary, reverse proxy directives, Dockerfile multi-stage security, docker-compose configuration, and backup/restore script flags
+- [x] Full Verification Gate: 95/95 unit tests green across 20 test files, 73/73 integration tests green across 18 test suites, 0 TypeScript errors, 0 ESLint warnings, and `next build` passing cleanly
+

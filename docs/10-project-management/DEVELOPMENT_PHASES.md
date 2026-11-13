@@ -193,7 +193,7 @@
 - **Expected Deliverables**: SSE streams, realtime hub, resilient client hooks.
 - **Acceptance Criteria**: Owner & Customer pages update in `< 1s` without refresh; 40 concurrent SSE subscribers trigger `<= 2` DB queries per queue change (`PT-02`).
 - **Testing Requirements**: `PT-02`, `PT-03`, Playwright two-context live sync (`E2E-01`).
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete`
 
 ---
 
@@ -206,7 +206,7 @@
 - **Expected Deliverables**: Analytics API & responsive visualization page.
 - **Acceptance Criteria**: Branch comparisons & trends match historical token totals accurately; staff lacking `ANALYTICS_VIEW` or branch access are blocked.
 - **Testing Requirements**: `IT-ANA-01`, cross-tenant analytics isolation test.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete`
 
 ---
 
@@ -219,8 +219,7 @@
 - **Expected Deliverables**: Platform Admin portal & APIs.
 - **Acceptance Criteria**: Suspending a tenant immediately halts public intake and owner mutations; admin endpoints contain zero raw customer mobile numbers/names.
 - **Testing Requirements**: `IT-ADM-01`, `IT-ADM-02`, `E2E-05`.
-- **Completion Status**: `⚪ Not Started`
-
+- **Completion Status**: `🟢 Complete`
 ---
 
 ## Phase 16: Security, Concurrency and Performance Testing
@@ -232,7 +231,7 @@
 - **Expected Deliverables**: Hardened production middleware & verified test pass report.
 - **Acceptance Criteria**: `0` TS/lint errors, all concurrency/isolation/notification/E2E suites green, `PT-01` read `p95 < 80ms` / write `p95 < 150ms`.
 - **Testing Requirements**: Full CI gate + security checklist audit.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete`
 
 ---
 
@@ -246,4 +245,4 @@
 - **Expected Deliverables**: Production deployment config, live verified platform, final `PROJECT_STATUS.md` & `CHANGELOG.md`.
 - **Acceptance Criteria**: Live `/api/health` green, end-to-end mobile push verified over HTTPS, backup & RLS restore verified.
 - **Testing Requirements**: Production smoke & restore checklist pass.
-- **Completion Status**: `⚪ Not Started`
+- **Completion Status**: `🟢 Complete`

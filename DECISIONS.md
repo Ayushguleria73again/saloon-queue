@@ -23,6 +23,11 @@ This document records all major architectural decisions, rationale, alternatives
 | `ADR-013` | iOS Safari Web Push UX Fallback | Graceful banner guiding "Add to Home Screen" + SSE live page | 🟢 Decided |
 | `ADR-014` | Multi-Station Waiting Time Estimation | Deterministic chair simulation (`activeStationsCount` + historical avg blend) | 🟢 Recommended |
 | `ADR-015` | Tenant Registration Activation | Immediate `ACTIVE` status + required Email Verification + abuse/rate limits + admin controls | 🟢 Decided |
+| `ADR-016` | Realtime SSE & Coalescing | Single-pass projection <= 2 queries for 40 listeners (`PT-02`) + 50ms coalescing | 🟢 Decided |
+| `ADR-017` | Analytics Aggregations | Indexed PostgreSQL SQL aggregations under tenant RLS without PII | 🟢 Decided |
+| `ADR-018` | Platform Administration | Non-PII operator governance (`IT-ADM-02`), tenant toggle (`IT-ADM-01`), dead-letter retry | 🟢 Decided |
+| `ADR-019` | Security & Performance Hardening | Strict headers, sliding-window rate limits, SSRF/CSRF/honeypot defenses, `PT-01..03` latency benchmarks | 🟢 Decided |
+| `ADR-020` | Production Deployment & Restore Drill | Multi-stage Docker standalone, unprivileged `app_runtime` DB role, reverse proxy SSE/SW headers, backup restore drill | 🟢 Decided |
 
 ---
 
@@ -98,6 +103,8 @@ This document records all major architectural decisions, rationale, alternatives
   1. Newly registered `Organization` accounts receive **`ACTIVE`** status immediately.
   2. **Email verification is required** (`User.emailVerifiedAt`) before full owner sign-in/dashboard access.
   3. Platform Administrators retain full **suspension (`SUSPENDED`) and deactivation (`DEACTIVATED`)** controls over any organization.
+  4. Registration enforces **abuse prevention and rate limiting** (`5 req / 1 hr` per IP, honeypot trap, disposable/spam throttling).
+  5. Optional manual platform approval (`PENDING` mode) remains configurable via `REQUIRE_ADMIN_TENANT_APPROVAL` for future policy toggles.
 
 ### `ADR-016`: Realtime SSE Architecture with Burst Coalescing & Single-Pass Snapshot Fan-Out
 - **Context**: Open browser screens (Owner `/owner/queue` and Customer `/token/[publicId]`) require sub-second live updates without manual page refreshes, while avoiding database query amplification (thundering herd) when dozens of customers simultaneously watch the same branch.
@@ -115,5 +122,82 @@ This document records all major architectural decisions, rationale, alternatives
      - Primary single-instance operation uses Node in-memory event fan-out with zero network hop latency.
      - Horizontal multi-instance operation (`REALTIME_TRANSPORT=pg-listen`) broadcasts mutations across container instances using PostgreSQL `LISTEN/NOTIFY` via `DIRECT_URL`.
 
-  4. Registration enforces **abuse prevention and rate limiting** (`5 req / 1 hr` per IP, honeypot trap, disposable/spam throttling).
-  5. Optional manual platform approval (`PENDING` mode) remains configurable via `REQUIRE_ADMIN_TENANT_APPROVAL` for future policy toggles.
+### `ADR-017`: Tenant-Scoped Indexed Analytics Engine with SQL Aggregations
+- **Context**: Salon owners and managers need daily, weekly, and monthly operational visibility (token throughput, top requested services, average wait times, service durations, completion rates, and cross-branch performance) while guaranteeing strict multi-tenant isolation, staff branch access boundaries, and sub-100ms API response times without N+1 query overhead.
+- **Decision**:
+  1. **Direct Indexed PostgreSQL Aggregations**:
+     - Aggregate operational statistics strictly inside PostgreSQL (`withTenantDb` with `SET LOCAL app.current_organization_id`) using composite index scans on `(organization_id, branch_id, business_date)` and `(organization_id, service_id)`.
+     - Employ single-query `COUNT(*) FILTER`, `AVG(EXTRACT(EPOCH FROM ...))`, and `DATE_TRUNC` to eliminate round-trips and memory overhead.
+  2. **Strict Multi-Branch & Staff RBAC Scoping**:
+     - Require `ANALYTICS_VIEW` permission for all analytics endpoints.
+     - For `STAFF` users, automatically intersect requested branch IDs with verified `StaffBranchAccess` records. If an unpermitted branch is requested, return `403 FORBIDDEN` (or `404 NOT_FOUND` for cross-tenant branches).
+  3. **Zero Customer PII Exposure**:
+     - Analytics aggregates deal strictly with anonymized metrics, service snapshots, and operational timestamps. Raw customer phone numbers, names, and notes are never returned or queried.
+  4. **Dynamic Granularity & Preset Intervals**:
+     - Support presets: `today` (hourly/daily), `7d` (daily), `30d` (daily/weekly), `90d` (weekly/monthly), and `custom` date ranges, automatically picking optimal time bucket granularities (`day`, `week`, `month`).
+  5. **Lightweight, Zero-Dependency Visualization**:
+     - Deliver responsive, accessible SVG/CSS charts styled entirely with SalonFlow's semantic Tailwind design tokens (`canvas`, `surface`, `ink`, `brand`, etc.), maintaining zero client bundle bloat.
+
+### `ADR-018`: Platform Administration, System-Wide Diagnostics, and Non-PII Operator Governance
+- **Context**: SaaS platform operators require centralized controls to monitor platform health, inspect tenants, audit failed background outbox jobs, and suspend abusive or delinquent organizations without compromising customer data privacy or violating multi-tenant boundaries.
+- **Decision**:
+  1. **Strict Platform Admin Authentication**:
+     - Access to `/admin/*` and `/api/admin/*` strictly requires `requirePlatformAdmin()` which validates `User.isPlatformAdmin === true` and session currency via `sessionVersion`.
+     - Non-admin sessions attempting access receive immediate `403 FORBIDDEN` (or redirect to `/owner/dashboard`).
+  2. **Non-PII Diagnostic Projections (`IT-ADM-02`)**:
+     - Platform admin endpoints query through `withSystemDb` while enforcing strict field projection rules: zero customer phone numbers, customer names, or appointment notes are ever exposed in admin views or API responses.
+     - Outbox job inspection surfaces sanitized event metadata (`eventType`, `attemptCount`, `status`, `lastError`, `organizationId`).
+  3. **Immediate Multi-Branch Tenant Suspension (`IT-ADM-01`)**:
+     - Suspending or deactivating an organization (`PATCH /api/admin/tenants/[organizationId]/status`) writes an audited state change (`TENANT_STATUS_CHANGED`).
+     - Suspension status is checked at the entry point of all authenticated tenant actions and public customer token intake, immediately blocking token creation and queue transitions across all branches of that tenant with `403 TENANT_SUSPENDED`.
+  4. **Self-Healing Background Job Inspection & Re-queue**:
+     - The background job management view (`/admin/jobs` and `GET /api/admin/jobs`) enables operators to inspect `RETRYING` and `DEAD_LETTER` events.
+     - Operators can re-queue stuck or dead-lettered events (`POST /api/admin/jobs/[eventId]/retry`), which atomically resets `status = 'PENDING'`, `attemptCount = 0`, and `nextAttemptAt = now`, triggering immediate delivery pickup by the background worker.
+
+### `ADR-019`: Security Hardening, Edge Rate Limiting, SSRF/CSRF Defenses, and Concurrency Performance Benchmarking
+- **Context**: As SalonFlow transitions toward production deployment, the platform requires multi-layered security verification against Denial of Service (DoS), Server-Side Request Forgery (SSRF), Cross-Site Request Forgery (CSRF), clickjacking, automated bot submissions, and high-concurrency race conditions, while meeting strict p95 latency targets (read < 80ms, write < 150ms) under simultaneous traffic loads.
+- **Decision**:
+  1. **Strict Transport & Security Headers**:
+     - Configure comprehensive security headers on all responses via `next.config.ts`:
+       - `X-Content-Type-Options: nosniff`
+       - `X-Frame-Options: DENY`
+       - `Referrer-Policy: strict-origin-when-cross-origin`
+       - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+       - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+       - `Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none';`
+  2. **Sliding-Window Memory Rate Limiting & Tolerant Wi-Fi Scoping**:
+     - Enforce `MemorySlidingWindowRateLimiter` with bounded LRU eviction (10,000 max entries) across all public, auth, and push endpoints.
+     - Differentiate IP-based flood controls (`20 req / 10m` per branch) from mobile-based spam prevention (`3 req / 15m` per branch) to tolerate shared salon Wi-Fi bursts.
+     - Return standard `429 Too Many Requests` responses with `Retry-After`, `X-RateLimit-Limit`, and `X-RateLimit-Remaining` headers.
+  3. **Multi-Vector Threat Defenses**:
+     - **CSRF Defense**: Enforce `assertSameOriginRequest` across all authenticated state mutations (`/api/owner/*`, `/api/admin/*`), validating `Origin` against `Host` headers alongside `SameSite=Lax` cookies.
+     - **Honeypot Bot Trap**: Require an empty hidden `website` field on both salon registration and public intake forms; submissions with filled honeypots are rejected immediately.
+     - **SSRF Defense**: Validate all push subscription endpoints via `validatePushEndpoint()`, blocking non-HTTPS URLs, localhost/loopback (`127.0.0.1`), link-local (`169.254.169.254`), and private RFC 1918 subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+  4. **Performance & Concurrency Latency Gate (`PT-01` – `PT-03`)**:
+     - Validate latency SLOs against real PostgreSQL connection pooling:
+       - Read Baseline (`PT-01`): 50 concurrent public branch reads achieve `p95 < 80ms`.
+       - Write Baseline (`PT-01`): 20 burst token creation writes with advisory locks achieve `p95 < 150ms`.
+       - SSE Fan-Out Budget (`PT-02`): 40 concurrent listeners receive broadcast updates with `<= 2` database queries.
+       - Cache Efficiency (`PT-03`): Polling with `If-None-Match` returns `304 Not Modified` without JSON payload overhead.
+
+### `ADR-020`: Production Deployment Architecture, Multi-Stage Containerization, Unprivileged DB Runtime, and Automated Restore Verification
+- **Context**: SalonFlow requires a hardened, repeatable, and automated production deployment packaging that enforces unprivileged database runtime execution (ensuring PostgreSQL Row-Level Security cannot be bypassed), supports non-blocking Server-Sent Events (SSE) and immediate Service Worker updates, and provides automated verified backup/restore drills to meet RPO <= 24h and RTO <= 30m.
+- **Decision**:
+  1. **Multi-Stage Containerization (`Dockerfile`)**:
+     - Implement multi-stage `node:20-alpine` build with Next.js `output: "standalone"`:
+       - `deps`: Install production and build dependencies cleanly (`npm ci`).
+       - `builder`: Generate Prisma client, compile Next.js standalone server and static bundles (`npm run build`).
+       - `runner`: Minimal unprivileged Alpine image running as non-root user `nextjs:nodejs` (UID 1001), copying standalone output, static assets, and Prisma schema.
+       - Built-in container healthcheck validating `/api/health`.
+  2. **Unprivileged Database Runtime Separation**:
+     - Database migrations (`prisma migrate deploy`) execute strictly via `DIRECT_URL` under the schema owner (`salonflow_admin`).
+     - Application runtime and background workers connect via `DATABASE_URL` using unprivileged role `app_runtime` (`NOSUPERUSER NOBYPASSRLS`), guaranteeing that PostgreSQL Row-Level Security (`SET LOCAL app.current_organization_id`) is strictly enforced by the database engine itself.
+  3. **Reverse Proxy & Gateway Configuration (`docker-compose.prod.yml` & `nginx.conf`)**:
+     - Enforce unbuffered SSE streaming (`proxy_buffering off;`, `X-Accel-Buffering: no;`, `proxy_read_timeout 120s;`).
+     - Enforce Service Worker update delivery (`/sw.js` with `Cache-Control: no-cache, no-store, must-revalidate` and `Service-Worker-Allowed: /`).
+     - Enforce TLS/HTTPS termination with production security headers (HSTS, CSP, X-Frame-Options, X-Content-Type-Options).
+  4. **Automated Backup & RLS Restore Verification Drill**:
+     - Build automated snapshot scripts (`scripts/backup.sh`, `scripts/restore.sh`) generating encrypted custom-format PostgreSQL dumps (`pg_dump -Fc --no-owner --no-acl`).
+     - Verification drill restores dumps into an isolated verification database, auditing that `relrowsecurity` remains enabled (`true`) across all tenant tables, testing unprivileged access, and verifying API health.
+  5. **Platform Admin Initial Provisioning**:
+     - Provide an idempotent, protected CLI provisioning tool (`scripts/seed-platform-admin.ts`) allowing operators to initialize or promote the primary Platform Administrator cleanly without manual database tampering.

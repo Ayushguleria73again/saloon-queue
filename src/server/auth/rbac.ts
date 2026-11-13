@@ -85,7 +85,7 @@ export async function authorizeTenantAction(
       },
     });
 
-    if (!user || !user.isActive || user.sessionVersion !== session.sessionVersion) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedError("Session is no longer valid. Please sign in again.");
     }
 
@@ -103,6 +103,10 @@ export async function authorizeTenantAction(
         "TENANT_SUSPENDED",
         "Your salon organization account is currently suspended or inactive.",
       );
+    }
+
+    if (user.sessionVersion !== session.sessionVersion) {
+      throw new UnauthorizedError("Session is no longer valid. Please sign in again.");
     }
 
     return { user, organizationName: organization.name };

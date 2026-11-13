@@ -15,7 +15,18 @@ export default auth((req) => {
     session: req.auth,
   });
 
-  return response ?? NextResponse.next();
+  const res = response ?? NextResponse.next();
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  res.headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none';",
+  );
+
+  return res;
 });
 
 export const config = {
