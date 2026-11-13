@@ -1,0 +1,36 @@
+config:
+  target: "http://localhost:3000"
+  environments:
+    local:
+      target: "http://localhost:3000"
+    docker:
+      target: "http://localhost:80"
+  processor: "../data/helper.js"
+  http:
+    timeout: 30
+    extendedMetrics: true
+    maxSockets: 200
+  phases:
+    - name: "SSE Stream Connection Ramp-up (50 VUs)"
+      duration: 10
+      arrivalRate: 5
+    - name: "SSE Stream Sustained Longevity (100 VUs)"
+      duration: 10
+      arrivalRate: 10
+
+scenarios:
+  - name: "Public Queue SSE Stream Longevity"
+    weight: 100
+    beforeScenario: "prepareCustomerScenario"
+    flow:
+      - get:
+          url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}/queue/events"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "text/event-stream"
+            Cache-Control: "no-cache"
+            Connection: "keep-alive"
+          expect:
+            - statusCode: 200
+            - contentType: "text/event-stream"
+

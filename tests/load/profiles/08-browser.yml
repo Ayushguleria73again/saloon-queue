@@ -1,0 +1,15 @@
+config:
+  target: "http://localhost:3000"
+  engines:
+    playwright: {}
+  processor: "../scenarios/browser-flow.js"
+  phases:
+    - name: "Playwright Browser UI Virtual Users (5 VUs)"
+      duration: 10
+      arrivalRate: 1
+
+scenarios:
+  - name: "Customer Full Browser Flow"
+    engine: playwright
+    testFunction: "customerBrowserFlow"
+

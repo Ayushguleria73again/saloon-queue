@@ -1,0 +1,188 @@
+[
+  {
+    "orgId": "88888888-1111-4000-8000-000000000001",
+    "orgName": "Urban Styles Load Test",
+    "orgSlug": "load-salon-1",
+    "ownerEmail": "owner.load1@salonflow.test",
+    "ownerPassword": "LoadTestPass123!",
+    "ownerSessionToken": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiTzRZQjFUNDBkaHNxMEJiLTJGdHlwY0o4MXgwNDY4WkhGSTlZSlN5My01b2hzUnVSdkFjeXNZbF8wSmZySmRvM3QxWnh6emJTNGJfeGp0X3E3N081bkEifQ..igGHNiwn41-BOOkjFllbRQ.6z0gg42zLoEp1ka9RPlynObTkmrEtKZmaLHtV9pHSfUALBwHrqCbtcKVP0F9Gq93mlIYm9qDFeBwd4oMVN33gUyK2F0qc0FqI0SoC6UbPxvSBS6bu2j0h5c65k4o0-vwNtoS4T-uF0KFNOvllk4uUrGVUef1bhG31B9ZG-szK0TtSJODQs1V-XLxupNilwCzM9iYVDU7gCavKmVRiPsR1MSZMmpTImvrPraPj4CNR_FhsWdWgioH2bTu7sB95vVT8UojKe0DYoL6rvqG4Nw3nafffucTCOTTWlvRPNWBKFvDrvDtz9U_8OQCPKKcrsyE.V7eQiWFlfRd2Nkl-eCfSdiM3vE0TOlXnqg6-TM-Keg8",
+    "branches": [
+      {
+        "branchId": "88888888-1111-4000-8000-000000000101",
+        "name": "Indiranagar Flagship",
+        "slug": "indiranagar",
+        "prefix": "A",
+        "services": [
+          {
+            "id": "88888888-1111-4000-8000-000000000401",
+            "name": "Quick Haircut",
+            "priceInPaise": 25000,
+            "durationMinutes": 30
+          },
+          {
+            "id": "88888888-1111-4000-8000-000000000402",
+            "name": "Beard Styling",
+            "priceInPaise": 15000,
+            "durationMinutes": 20
+          },
+          {
+            "id": "88888888-1111-4000-8000-000000000403",
+            "name": "Express Facial",
+            "priceInPaise": 80000,
+            "durationMinutes": 45
+          }
+        ]
+      },
+      {
+        "branchId": "88888888-1111-4000-8000-000000000102",
+        "name": "Koramangala Express",
+        "slug": "koramangala",
+        "prefix": "K",
+        "services": [
+          {
+            "id": "88888888-1111-4000-8000-000000000401",
+            "name": "Quick Haircut",
+            "priceInPaise": 25000,
+            "durationMinutes": 30
+          },
+          {
+            "id": "88888888-1111-4000-8000-000000000402",
+            "name": "Beard Styling",
+            "priceInPaise": 15000,
+            "durationMinutes": 20
+          },
+          {
+            "id": "88888888-1111-4000-8000-000000000403",
+            "name": "Express Facial",
+            "priceInPaise": 80000,
+            "durationMinutes": 45
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "orgId": "88888888-2222-4000-8000-000000000002",
+    "orgName": "Luxe Cuts Load Test",
+    "orgSlug": "load-salon-2",
+    "ownerEmail": "owner.load2@salonflow.test",
+    "ownerPassword": "LoadTestPass123!",
+    "ownerSessionToken": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiTzRZQjFUNDBkaHNxMEJiLTJGdHlwY0o4MXgwNDY4WkhGSTlZSlN5My01b2hzUnVSdkFjeXNZbF8wSmZySmRvM3QxWnh6emJTNGJfeGp0X3E3N081bkEifQ..IrnBD0waEv_NbtF3PKWBGg.aguawcLAslk2PJGTnZjsDE_SvAng2qnyTN7nn7m696o8tAN5_NLnhwPZ9rpH1_M1HlMFqWWjJ6viD5RMaeo6YppHOqGtiDyeV5gkM36ouSCK-PDxUHtDVHP8as5TmJM7PqlAfuYcL0o3cbtgBQsKc5g85KPx07yd8xtH-X0CaK_Qam6tfP-lk4nwVq3i-hbvDmTWpzasO1eo-HrIyRpcyvMSZFkylMHYbtAu51RhmyLS7IEMvlP06xakK7X3cp2OexTRMRjeNjCe2CjrGLF6OYRqixwRDhBW2ZfrZ4xDy6cUnHGc6_LnvcWNr0Bt95Q9.73j98hzJh0NFs-_xyFgXsFf0p0f1jMS09GRcujyu1qE",
+    "branches": [
+      {
+        "branchId": "88888888-2222-4000-8000-000000000201",
+        "name": "Bandra Studio",
+        "slug": "bandra",
+        "prefix": "B",
+        "services": [
+          {
+            "id": "88888888-2222-4000-8000-000000000401",
+            "name": "Quick Haircut",
+            "priceInPaise": 25000,
+            "durationMinutes": 30
+          },
+          {
+            "id": "88888888-2222-4000-8000-000000000402",
+            "name": "Beard Styling",
+            "priceInPaise": 15000,
+            "durationMinutes": 20
+          },
+          {
+            "id": "88888888-2222-4000-8000-000000000403",
+            "name": "Express Facial",
+            "priceInPaise": 80000,
+            "durationMinutes": 45
+          }
+        ]
+      },
+      {
+        "branchId": "88888888-2222-4000-8000-000000000202",
+        "name": "Juhu Lounge",
+        "slug": "juhu",
+        "prefix": "J",
+        "services": [
+          {
+            "id": "88888888-2222-4000-8000-000000000401",
+            "name": "Quick Haircut",
+            "priceInPaise": 25000,
+            "durationMinutes": 30
+          },
+          {
+            "id": "88888888-2222-4000-8000-000000000402",
+            "name": "Beard Styling",
+            "priceInPaise": 15000,
+            "durationMinutes": 20
+          },
+          {
+            "id": "88888888-2222-4000-8000-000000000403",
+            "name": "Express Facial",
+            "priceInPaise": 80000,
+            "durationMinutes": 45
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "orgId": "88888888-3333-4000-8000-000000000003",
+    "orgName": "Apex Grooming Load Test",
+    "orgSlug": "load-salon-3",
+    "ownerEmail": "owner.load3@salonflow.test",
+    "ownerPassword": "LoadTestPass123!",
+    "ownerSessionToken": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoiTzRZQjFUNDBkaHNxMEJiLTJGdHlwY0o4MXgwNDY4WkhGSTlZSlN5My01b2hzUnVSdkFjeXNZbF8wSmZySmRvM3QxWnh6emJTNGJfeGp0X3E3N081bkEifQ..G44QRukrFcq3NE87DR9oAw.iyIkCDeQVyvA287z2XsCY_8vGPzddkOCMYYCc_6KW_XB5Ns0J_0jVzD7JA6K5sod1LQg6hkpZArcIMwzoeIvOBa6p67LC11sexuXTvptrAvRCPbhgQpcSZ50jQOVUhOFg1ADkSOqzIJzT6Iv0mwOf23v3zrkFMOG0DDvdwkH7-uP5t26QZqwbzRw8RUh4IJuLXxtmlHGFlLKdCSn2UeeXq94iTZf-fa3Pa7cFb_j8w2DGKA6rcIMux7wx3QA60HhpAQQ_MndqQtDY1KEghKZOB3fdAgDdi6HbsSb8-WbbCZzMBrh1lxWQOod0qXvqWVA.IEIvudcnQtIpHKDtw1jz2FHlaxjDdalmNVKhh5KUZtg",
+    "branches": [
+      {
+        "branchId": "88888888-3333-4000-8000-000000000301",
+        "name": "Connaught Place",
+        "slug": "connaught",
+        "prefix": "C",
+        "services": [
+          {
+            "id": "88888888-3333-4000-8000-000000000401",
+            "name": "Quick Haircut",
+            "priceInPaise": 25000,
+            "durationMinutes": 30
+          },
+          {
+            "id": "88888888-3333-4000-8000-000000000402",
+            "name": "Beard Styling",
+            "priceInPaise": 15000,
+            "durationMinutes": 20
+          },
+          {
+            "id": "88888888-3333-4000-8000-000000000403",
+            "name": "Express Facial",
+            "priceInPaise": 80000,
+            "durationMinutes": 45
+          }
+        ]
+      },
+      {
+        "branchId": "88888888-3333-4000-8000-000000000302",
+        "name": "Cyberhub Gurgaon",
+        "slug": "cyberhub",
+        "prefix": "G",
+        "services": [
+          {
+            "id": "88888888-3333-4000-8000-000000000401",
+            "name": "Quick Haircut",
+            "priceInPaise": 25000,
+            "durationMinutes": 30
+          },
+          {
+            "id": "88888888-3333-4000-8000-000000000402",
+            "name": "Beard Styling",
+            "priceInPaise": 15000,
+            "durationMinutes": 20
+          },
+          {
+            "id": "88888888-3333-4000-8000-000000000403",
+            "name": "Express Facial",
+            "priceInPaise": 80000,
+            "durationMinutes": 45
+          }
+        ]
+      }
+    ]
+  }
+]

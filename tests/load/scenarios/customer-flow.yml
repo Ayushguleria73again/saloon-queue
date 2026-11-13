@@ -1,0 +1,88 @@
+# Customer Flow Scenario for Artillery
+# Models real-world customer journey: browse branch -> select services -> intake submission -> token tracking -> polling -> cancellation
+name: "Customer Queue Journey"
+weight: 85
+beforeScenario: "prepareCustomerScenario"
+flow:
+  # 1. Visit public salon/branch page & load snapshot (services, hours, wait times)
+  - get:
+      url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}"
+      headers:
+        x-forwarded-for: "{{ clientIp }}"
+        Accept: "application/json"
+      expect:
+        - statusCode: 200
+        - contentType: json
+
+  # 2. Realistic think time: customer reviews services & enters details (1-3 seconds)
+  - think: 2
+
+  # 3. Submit intake form & join FIFO queue
+  - post:
+      url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}/tokens"
+      headers:
+        x-forwarded-for: "{{ clientIp }}"
+        Content-Type: "application/json"
+        Origin: "http://localhost:3000"
+      json:
+        fullName: "{{ fullName }}"
+        mobileNumber: "{{ mobileNumber }}"
+        serviceIds: "{{ serviceIds }}"
+        website: ""
+        idempotencyKey: "{{ idempotencyKey }}"
+        notes: "Artillery synthetic load test"
+      afterResponse: "checkTokenResponse"
+      capture:
+        - json: "$.token.publicId"
+          as: "publicId"
+        - json: "$.token.tokenNumber"
+          as: "tokenNumber"
+      expect:
+        - statusCode:
+            - 200
+            - 201
+
+  # 4. Realistic think time: redirect to live token tracking page (1-2 seconds)
+  - think: 1
+
+  # 5. Retrieve initial token status
+  - get:
+      url: "/api/public/tokens/{{ publicId }}"
+      headers:
+        x-forwarded-for: "{{ clientIp }}"
+        Accept: "application/json"
+      afterResponse: "captureEtag"
+      expect:
+        - statusCode: 200
+
+  # 6. Think time: customer waits while monitoring queue (2-4 seconds)
+  - think: 2
+
+  # 7. Refresh token status with ETag (validates conditional 304 caching)
+  - get:
+      url: "/api/public/tokens/{{ publicId }}"
+      headers:
+        x-forwarded-for: "{{ clientIp }}"
+        Accept: "application/json"
+        If-None-Match: "{{ lastEtag }}"
+      expect:
+        - statusCode:
+            - 200
+            - 304
+
+  # 8. Conditional: 20% of customers cancel their waiting token
+  - think: 1
+  - post:
+      url: "/api/public/tokens/{{ publicId }}/cancel"
+      ifTrue: "shouldCancel"
+      headers:
+        x-forwarded-for: "{{ clientIp }}"
+        Content-Type: "application/json"
+        Origin: "http://localhost:3000"
+      json:
+        reason: "Customer self-cancelled during load test"
+      expect:
+        - statusCode:
+            - 200
+            - 400 # May return 400 if branch settings disallow cancel or token was already called
+

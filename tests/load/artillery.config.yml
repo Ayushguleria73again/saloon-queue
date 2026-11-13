@@ -1,0 +1,20 @@
+# Base Artillery Configuration for SalonFlow Load Testing Framework
+config:
+  target: "http://localhost:3000"
+  environments:
+    local:
+      target: "http://localhost:3000"
+    docker:
+      target: "http://localhost:80"
+    staging:
+      target: "https://staging.salonflow.app"
+  processor: "./data/helper.js"
+  http:
+    timeout: 10
+    extendedMetrics: true
+    maxSockets: 1000
+    pool: 250
+  plugins:
+    metrics-by-endpoint:
+      useOnlyPath: true
+

@@ -18,6 +18,16 @@ export const metadata: Metadata = {
   title: "SalonFlow — Multi-Tenant Salon Queue Management SaaS",
   description:
     "Digital QR queue management, strict FIFO token tracking, and Web Push alerts for modern salons.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "SalonFlow",
+  },
 };
 
 export default function RootLayout({

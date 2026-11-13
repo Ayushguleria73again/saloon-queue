@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="sf-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#0A0D14" />
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="none" stroke="#1E293B" stroke-width="8" />
+  <!-- Stylized Flowing S & Q Motif -->
+  <path d="M160 160 C160 120, 220 120, 256 120 C320 120, 352 150, 352 190 C352 240, 160 260, 160 320 C160 370, 200 392, 256 392 C310 392, 352 360, 352 320" fill="none" stroke="url(#sf-grad)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="352" cy="384" r="28" fill="#60A5FA" />
+</svg>

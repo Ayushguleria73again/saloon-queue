@@ -1,0 +1,89 @@
+config:
+  target: "http://localhost:3000"
+  environments:
+    local:
+      target: "http://localhost:3000"
+    docker:
+      target: "http://localhost:80"
+  processor: "../data/helper.js"
+  http:
+    timeout: 10
+    extendedMetrics: true
+    maxSockets: 20
+  phases:
+    - name: "Smoke Verification (10 VUs)"
+      duration: 5
+      arrivalRate: 2
+
+scenarios:
+  - name: "Customer Queue Journey"
+    weight: 85
+    beforeScenario: "prepareCustomerScenario"
+    flow:
+      - get:
+          url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+      - think: 1
+      - post:
+          url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}/tokens"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+          json:
+            fullName: "{{ fullName }}"
+            mobileNumber: "{{ mobileNumber }}"
+            serviceIds: "{{ serviceIds }}"
+            website: ""
+            idempotencyKey: "{{ idempotencyKey }}"
+            notes: "Smoke load test"
+          afterResponse: "checkTokenResponse"
+          capture:
+            - json: "$.token.publicId"
+              as: "publicId"
+            - json: "$.token.tokenNumber"
+              as: "tokenNumber"
+      - think: 1
+      - get:
+          url: "/api/public/tokens/{{ publicId }}"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+          afterResponse: "captureEtag"
+      - think: 1
+      - get:
+          url: "/api/public/tokens/{{ publicId }}"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+            If-None-Match: "{{ lastEtag }}"
+
+  - name: "Owner Queue Management Journey"
+    weight: 15
+    beforeScenario: "prepareOwnerScenario"
+    flow:
+      - get:
+          url: "/api/owner/branches/{{ branchId }}/queue"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+      - think: 1
+      - post:
+          url: "/api/owner/branches/{{ branchId }}/queue/call-next"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+          capture:
+            - json: "$.token.id"
+              as: "calledTokenId"
+      - get:
+          url: "/api/owner/branches/{{ branchId }}/queue"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"

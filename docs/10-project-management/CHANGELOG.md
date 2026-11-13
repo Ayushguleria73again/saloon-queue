@@ -2,6 +2,48 @@
 
 ---
 
+## [0.19.0 — Conditional Pilot Release & Production Hardening] - 2026-11-13
+
+### Added & Hardened
+- **Reconciled Automated Test Baseline (181/181 Tests Passing)**:
+  - Reconciled test count discrepancy (168 tests at Phase 17 + 13 tests from Whole-Feature Bug Hunt = 181 total passing tests across 39 files).
+  - 95 Unit Tests passing across 20 files (`npm run test:unit`).
+  - 86 Integration Tests passing across 19 files (`npm run test:int`).
+- **Production Secrets Validation Tooling (`scripts/validate-production-env.ts`)**:
+  - Implemented automated secrets auditor (`npm run env:validate`) enforcing cryptographic entropy, `app_runtime` non-superuser role in `DATABASE_URL`, VAPID key validity, and HTTPS URLs.
+  - Added `.env.production.example` template with secret generation guides.
+- **Production SSL/TLS & Reverse Proxy Configuration**:
+  - Added `docker/nginx/nginx.ssl.conf` with TLS 1.2/1.3, modern ciphers, and HSTS preload.
+  - Added `scripts/setup-ssl.sh` (`npm run ssl:setup`) automating Let's Encrypt / Certbot renewal and self-signed certificate generation.
+  - Exposed ports `80` and `443` in `docker-compose.prod.yml` with cert volumes.
+- **Web App Manifest & iOS PWA Infrastructure**:
+  - Implemented `src/app/manifest.ts` (Next.js dynamic `/manifest.webmanifest`), `public/manifest.json`, and SVG icon `public/icon.svg`.
+  - Added Apple mobile web app metadata in `src/app/layout.tsx` to unlock native Web Push on iOS 16.4+ standalone Home Screen mode.
+- **Automated Off-Site Cloud Backup Synchronization (`scripts/sync-backup-offsite.sh`)**:
+  - Implemented cloud replication script (`npm run db:backup:offsite`) supporting AWS S3, Cloudflare R2, and GCS with server-side AES256 encryption.
+- **Scale-Readiness Architectural Roadmap (`docs/04-architecture/SCALE_READINESS.md`)**:
+  - Formally specified horizontal scaling path for multi-instance SSE fan-out (PostgreSQL LISTEN/NOTIFY and Redis Pub/Sub) and distributed rate limiting.
+- **Pilot & Audit Documentation**:
+  - Authored `PRODUCTION_READINESS_AUDIT.md`, `SECURITY_AUDIT.md`, `DEPLOYMENT_VERIFICATION.md`, `PILOT_TESTING_PLAN.md`, `RELEASE_CHECKLIST.md`, and `PILOT_LAUNCH_REPORT.md`.
+
+---
+
+## [0.18.1 — Comprehensive Whole-Feature Bug Hunt & Invariant Verification] - 2026-11-13
+
+### Verified & Hardened
+- **Systematic Whole-Feature Bug Hunt Suite (`tests/integration/whole-feature-bug-hunt.test.ts`)**:
+  - Authored and verified 13 end-to-end integration tests across all core features and critical invariant edge cases against live PostgreSQL:
+  - **Public Intake & Token Invariants**: Verified that customer self-cancellation is strictly blocked once a token is `CALLED` or `IN_SERVICE` (`SELF_CANCEL_NOT_ALLOWED`), verified enforcement of branch `allowCustomerCancel: false`, and verified prevention of duplicate active tokens for the same mobile when `allowDuplicateActiveTokens: false`.
+  - **FIFO Queue State Machine Invariants**: Verified that `callNextToken` on an empty queue cleanly throws `NO_WAITING_CUSTOMERS`, invalid status transitions (e.g. `WAITING` directly to `COMPLETED`) are strictly rejected (`INVALID_STATE_TRANSITION`), re-queuing a non-skipped token is rejected, and double re-queuing the same skipped token is rejected.
+  - **Services Catalog & Overrides Isolation**: Verified that branch price and duration overrides are strictly isolated to the specified branch, preserving original base prices at all sibling branches.
+  - **Staff RBAC & Access Boundaries**: Verified that staff members restricted to Branch 1 are strictly forbidden from performing queue operations on Branch 2 (`BRANCH_ACCESS_DENIED`), and users are prevented from revoking their own active membership.
+  - **Waiting Time Simulator**: Verified zero-token queue snapshot behavior returns 0 wait time, 0 people ahead, and 1.0 overrun factor without division-by-zero or NaN.
+  - **Analytics Reporting**: Verified that querying analytics for a brand-new branch with 0 tokens returns valid 0s without NaN or Infinity, and strictly eliminates customer PII.
+  - **Platform Administration & Tenant Suspension**: Verified that suspending an organization immediately halts public token generation (`TENANT_SUSPENDED`), invalidates active JWT sessions via `sessionVersion` increments, and protects customer PII across operator DTOs.
+  - **Quality Gates**: All 95 unit tests green across 20 files, all 86 integration tests green across 19 suites, 0 TypeScript errors, 0 ESLint warnings.
+
+---
+
 ## [0.18.0 — Phase 17: Production Deployment] - 2026-11-13
 
 ### Added

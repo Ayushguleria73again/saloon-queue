@@ -206,5 +206,28 @@ Legend: 🟢 Complete | 🔵 In Progress | 🟡 Pending Review | ⚪ Not Started
   - `scripts/deploy.sh`: Production deployment runner automating env validation, `prisma migrate deploy`, role grant verification, Platform Admin seeding, and RLS security auditing
 - [x] Platform Administrator Provisioning CLI (`scripts/seed-platform-admin.ts`): Idempotent admin provisioning tool with custom email, bcrypt password hash, and `isPlatformAdmin` assignment; mapped to `npm run seed:admin`
 - [x] Production Deployment Smoke Suite (`tests/integration/production-deployment-smoke.test.ts`): 7/7 tests verifying table RLS status, unprivileged runtime boundary, reverse proxy directives, Dockerfile multi-stage security, docker-compose configuration, and backup/restore script flags
-- [x] Full Verification Gate: 95/95 unit tests green across 20 test files, 73/73 integration tests green across 18 test suites, 0 TypeScript errors, 0 ESLint warnings, and `next build` passing cleanly
+- [x] Full Verification Gate: 95/95 unit tests green across 20 test files, 86/86 integration tests green across 19 test suites, 0 TypeScript errors, 0 ESLint warnings, and `next build` passing cleanly
+
+## Completed Whole-Feature Bug Hunt Deliverables
+
+- [x] Comprehensive Bug Hunt Integration Suite (`tests/integration/whole-feature-bug-hunt.test.ts`): Built 13 end-to-end integration tests systematically exercising all 8 core functional areas against live PostgreSQL under boundary, adversarial, and race conditions
+- [x] Public Intake & Token Cancellation Invariants: Verified that self-cancellation is strictly forbidden once a token is `CALLED` or `IN_SERVICE` (`SELF_CANCEL_NOT_ALLOWED`), verified enforcement of branch `allowCustomerCancel: false`, and verified prevention of duplicate active tokens for the same mobile when `allowDuplicateActiveTokens: false`
+- [x] FIFO Queue State Machine Invariants: Verified that `callNextToken` on an empty queue throws `NO_WAITING_CUSTOMERS`, invalid status transitions (e.g. `WAITING` -> `COMPLETED`) are rejected (`INVALID_STATE_TRANSITION`), re-queuing non-skipped tokens is rejected, and double re-queuing the same skipped token is blocked
+- [x] Services Catalog & Overrides Isolation: Verified that branch price overrides are strictly scoped to the specified branch, preserving original base prices at all sibling branches
+- [x] Staff RBAC & Access Boundaries: Verified that staff members restricted to Branch 1 are strictly forbidden from performing queue operations on Branch 2 (`BRANCH_ACCESS_DENIED`), and users are prevented from revoking their own active membership
+- [x] Waiting Time Simulator: Verified zero-token queue snapshot behavior returns 0 wait time, 0 people ahead, and 1.0 overrun factor without division-by-zero or NaN
+- [x] Analytics Reporting: Verified that querying analytics for a brand-new branch with 0 tokens returns valid 0s without NaN or Infinity, and strictly eliminates customer PII
+- [x] Platform Administration & Tenant Suspension: Verified that suspending an organization immediately halts public token generation (`TENANT_SUSPENDED`), invalidates active JWT sessions via `sessionVersion` increments, and protects customer PII across operator DTOs
+- [x] Test Count Reconciliation: Clarified the baseline shift from 168 tests (Phase 17) to **181 tests** (post Bug Hunt: 95 unit + 86 integration across 39 test files)
+
+## Completed Pilot Release Preparation Deliverables
+
+- [x] Production Environment Secrets Validator (`scripts/validate-production-env.ts` & `npm run env:validate`): Automated script enforcing cryptographic entropy (AUTH_SECRET >= 32, IP_HASH_SALT >= 16, CRON_SECRET >= 16), unprivileged `app_runtime` database role enforcement, VAPID keypair structure, and HTTPS URLs
+- [x] Production HTTPS/TLS Configuration (`docker/nginx/nginx.conf`, `docker/nginx/nginx.ssl.conf`, `scripts/setup-ssl.sh` & `npm run ssl:setup`): Automated SSL/TLS runner supporting ACME challenge verification, port 80 HTTP-to-HTTPS redirection, and direct port 443 TLS 1.2/1.3 termination
+- [x] Web App Manifest & iOS PWA Infrastructure (`src/app/manifest.ts`, `public/manifest.json`, `public/icon.svg`): Created standalone Web App Manifest enabling iOS Safari 16.4+ Home Screen installation and native Web Push API access
+- [x] Off-Site Backup Replication (`scripts/sync-backup-offsite.sh` & `npm run db:backup:offsite`): Automated cloud backup script supporting AWS S3 / Cloudflare R2 / GCS with AES256 server-side encryption and retention rotation
+- [x] Scale-Readiness Architectural Specification (`docs/04-architecture/SCALE_READINESS.md`): Formally documented horizontal scaling path (PostgreSQL LISTEN/NOTIFY fan-out, Redis sliding-window distributed rate limiting, and decoupled outbox worker containers)
+- [x] Production Release & Pilot Plans (`PRODUCTION_READINESS_AUDIT.md`, `SECURITY_AUDIT.md`, `DEPLOYMENT_VERIFICATION.md`, `PILOT_TESTING_PLAN.md`, `RELEASE_CHECKLIST.md`, `PILOT_LAUNCH_REPORT.md`)
+
+
 

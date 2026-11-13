@@ -36,6 +36,10 @@ services:
       OUTBOX_POLL_INTERVAL_MS: "3000"
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-salonflow_prod_secret_key_minimum_32_chars_long!}
+      AUTH_URL: ${AUTH_URL:-${NEXTAUTH_URL:-http://localhost}}
+      AUTH_SECRET: ${AUTH_SECRET:-${NEXTAUTH_SECRET:-salonflow_prod_secret_key_minimum_32_chars_long!}}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost}
+      IP_HASH_SALT: ${IP_HASH_SALT:-salonflow_prod_ip_hash_salt_32_chars_long!}
       CRON_SECRET: ${CRON_SECRET:-salonflow_cron_secret_prod_key_32_chars!}
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
       VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
@@ -55,8 +59,11 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - ./docker/nginx/certbot:/var/www/certbot:ro
     depends_on:
       - app
     networks:

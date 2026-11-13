@@ -9,7 +9,10 @@ echo " Starting SalonFlow Production Deployment"
 echo "======================================================================"
 
 # 1. Environment Variable Validation
-REQUIRED_VARS=("DATABASE_URL" "DIRECT_URL" "NEXTAUTH_SECRET" "NEXT_PUBLIC_VAPID_PUBLIC_KEY" "VAPID_PRIVATE_KEY")
+if [ -z "${AUTH_SECRET:-}" ] && [ -n "${NEXTAUTH_SECRET:-}" ]; then
+  export AUTH_SECRET="${NEXTAUTH_SECRET}"
+fi
+REQUIRED_VARS=("DATABASE_URL" "DIRECT_URL" "AUTH_SECRET" "IP_HASH_SALT" "NEXT_PUBLIC_VAPID_PUBLIC_KEY" "VAPID_PRIVATE_KEY")
 for VAR in "${REQUIRED_VARS[@]}"; do
   if [ -z "${!VAR:-}" ]; then
     echo "ERROR: Mandatory environment variable ${VAR} is not set." >&2
@@ -41,7 +44,7 @@ EOSQL
 
 # 4. Provision or Update Initial Platform Administrator
 echo "[DEPLOY 3/4] Ensuring initial Platform Administrator is provisioned..."
-npx tsx scripts/seed-platform-admin.ts || node scripts/seed-platform-admin.js || true
+npx vite-node scripts/seed-platform-admin.ts || npx tsx scripts/seed-platform-admin.ts || true
 
 # 5. Verify Row-Level Security Status
 echo "[DEPLOY 4/4] Auditing Row-Level Security (RLS) on production database..."

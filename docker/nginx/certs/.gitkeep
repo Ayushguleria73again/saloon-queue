@@ -1,0 +1,1 @@
+# Keep certs directory for mounting TLS certificates (fullchain.pem, privkey.pem)

@@ -1,0 +1,157 @@
+config:
+  target: "http://localhost:3000"
+  environments:
+    local:
+      target: "http://localhost:3000"
+    docker:
+      target: "http://localhost:80"
+  processor: "../data/helper.js"
+  http:
+    timeout: 10
+    extendedMetrics: true
+    maxSockets: 50
+  phases:
+    - name: "Warm-up (10 VUs)"
+      duration: 5
+      arrivalRate: 2
+    - name: "Baseline Operations (40 VUs)"
+      duration: 10
+      arrivalRate: 4
+
+scenarios:
+  - name: "Customer Queue Journey"
+    weight: 85
+    beforeScenario: "prepareCustomerScenario"
+    flow:
+      - get:
+          url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - post:
+          url: "/api/public/salons/{{ salonSlug }}/{{ branchSlug }}/tokens"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+          json:
+            fullName: "{{ fullName }}"
+            mobileNumber: "{{ mobileNumber }}"
+            serviceIds: "{{ serviceIds }}"
+            website: ""
+            idempotencyKey: "{{ idempotencyKey }}"
+            notes: "Baseline load test"
+          afterResponse: "checkTokenResponse"
+          capture:
+            - json: "$.token.publicId"
+              as: "publicId"
+            - json: "$.token.tokenNumber"
+              as: "tokenNumber"
+          expect:
+            - statusCode:
+                - 200
+                - 201
+      - think: 1
+      - get:
+          url: "/api/public/tokens/{{ publicId }}"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+          afterResponse: "captureEtag"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/api/public/tokens/{{ publicId }}"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+            If-None-Match: "{{ lastEtag }}"
+          expect:
+            - statusCode:
+                - 200
+                - 304
+      - think: 1
+      - post:
+          url: "/api/public/tokens/{{ publicId }}/cancel"
+          ifTrue: "shouldCancel"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+          json:
+            reason: "Changed plans"
+          expect:
+            - statusCode:
+                - 200
+                - 400
+
+  - name: "Owner Queue Management Journey"
+    weight: 15
+    beforeScenario: "prepareOwnerScenario"
+    flow:
+      - get:
+          url: "/api/owner/branches/{{ branchId }}/queue"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - post:
+          url: "/api/owner/branches/{{ branchId }}/queue/call-next"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+          capture:
+            - json: "$.token.id"
+              as: "calledTokenId"
+          expect:
+            - statusCode:
+                - 200
+                - 400
+      - think: 1
+      - patch:
+          url: "/api/owner/branches/{{ branchId }}/tokens/{{ calledTokenId }}/status"
+          ifTrue: "calledTokenId"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+          json:
+            action: "START_SERVICE"
+          expect:
+            - statusCode:
+                - 200
+                - 400
+      - think: 2
+      - patch:
+          url: "/api/owner/branches/{{ branchId }}/tokens/{{ calledTokenId }}/status"
+          ifTrue: "calledTokenId"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Content-Type: "application/json"
+            Origin: "http://localhost:3000"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+          json:
+            action: "COMPLETE"
+          expect:
+            - statusCode:
+                - 200
+                - 400
+      - get:
+          url: "/api/owner/branches/{{ branchId }}/queue"
+          headers:
+            x-forwarded-for: "{{ clientIp }}"
+            Accept: "application/json"
+            Cookie: "authjs.session-token={{ ownerSessionToken }}"
+          expect:
+            - statusCode: 200
+
